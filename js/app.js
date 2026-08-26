@@ -55,11 +55,12 @@ $('#ttFile').addEventListener('change', async e => {
     S.items = r.items; S.startHour = r.startHour; S.endHour = r.endHour; S.dayCount = r.dayCount;
     S._srcImg = img;
     renderParseInfo();
+    runOCR();                      // 업로드하면 과목명까지 자동 인식
   } catch (err) { console.error(err); $('#parseInfo').innerHTML = '자동 인식 실패 — <u id="openEdit">직접 입력하기</u>'; bindEditLinks(); }
 });
 
 function renderParseInfo() {
-  $('#parseInfo').innerHTML = `${S.items.length}개 과목 인식됨 · <u id="openEdit">확인/수정</u> · <u id="doOcr">과목명 자동 인식</u>`;
+  $('#parseInfo').innerHTML = `${S.items.length}개 과목 인식됨 · <u id="openEdit">확인/수정</u> · <u id="doOcr">글자 다시 인식</u>`;
   bindEditLinks();
 }
 function bindEditLinks() {
@@ -167,13 +168,20 @@ function parseTimetableImage(img) {
     const grp = [];
     gaps.forEach(g2 => {
       const last = grp[grp.length - 1];
-      if (last && g2[0] - last[1] < pitch * .32) last[1] = g2[1]; else grp.push([...g2]);
+      if (last && g2[0] - last[1] < pitch * .5) last[1] = g2[1]; else grp.push([...g2]);
     });
     if (grp.length < 2) { parts.push(m); return; }
     const lead = grp[0][0];
-    for (let k = 0; k < grp.length; k++) {
-      const y0 = m.y0 + (k ? grp[k][0] - lead : 0);
-      const y1 = k < grp.length - 1 ? m.y0 + grp[k + 1][0] - lead - 1 : m.y1;
+    // 분할선이 30분 격자에 맞을 때만 다른 과목으로 본다 (부가정보 줄 간격 때문에 쪼개지지 않도록)
+    const cuts = [0];
+    for (let k = 1; k < grp.length; k++) {
+      const y = m.y0 + grp[k][0] - lead, u = (y - top) / pitch * 2;
+      if (Math.abs(u - Math.round(u)) < .16) cuts.push(grp[k][0] - lead);
+    }
+    if (cuts.length < 2) { parts.push(m); return; }
+    for (let k = 0; k < cuts.length; k++) {
+      const y0 = m.y0 + cuts[k];
+      const y1 = k < cuts.length - 1 ? m.y0 + cuts[k + 1] - 1 : m.y1;
       if (y1 - y0 > pitch * .3) parts.push({ ...m, y0, y1, h: y1 - y0 + 1 });
     }
   });
@@ -196,7 +204,7 @@ function parseTimetableImage(img) {
 /* ---- OCR (선택) ---- */
 async function runOCR() {
   if (!S._srcImg || !S.items.length) return;
-  toast('글자 인식 준비 중… (최초 1회 다운로드)', 4000);
+  toast('글자를 읽는 중이에요… (처음 한 번은 조금 걸려요)', 6000);
   try {
     if (!window.Tesseract) await new Promise((ok, no) => {
       const s = document.createElement('script');
@@ -204,6 +212,7 @@ async function runOCR() {
       document.head.appendChild(s);
     });
     const worker = await Tesseract.createWorker('kor');
+    await worker.setParameters({ tessedit_pageseg_mode: '6' });
     const img = S._srcImg, k = img.width / 480;
     for (const it of S.items) {
       const b = it.box, cv = document.createElement('canvas');
@@ -384,7 +393,7 @@ async function ensureAssets() {
 /* ================= 3. 캔버스 렌더링 ================= */
 const cv = $('#stage'), ctx = cv.getContext('2d');
 function fitStage() {                 // 미리보기는 화면 해상도로 직접 렌더 (축소 뭉개짐 방지)
-  const maxH = Math.min(window.innerHeight * .46, 459), maxW = Math.min(211, window.innerWidth - 56);
+  const maxH = Math.min(window.innerHeight * .5, 520), maxW = Math.min(300, window.innerWidth - 56);
   const ar = S.device[1] / S.device[2];
   let w = maxW, h = w / ar;
   if (h > maxH) { h = maxH; w = h * ar; }
@@ -574,9 +583,9 @@ function draw() {
     const r = bubbleRect(); ctx.drawImage(S.bubbleImg, r.x, r.y, r.w, r.h);
     if (S.bbLw > 1.02) {                       // 선만 뽑아 여러 방향으로 겹쳐 굵게
       const L = bubbleLine();
-      const rad = (S.bbLw - 1) * r.w * .008;
-      for (let a = 0; a < 8; a++) {
-        const t2 = a * Math.PI / 4;
+      const rad = (S.bbLw - 1) * r.w * .0045;
+      for (let a = 0; a < 12; a++) {
+        const t2 = a * Math.PI / 6;
         ctx.drawImage(L, r.x + Math.cos(t2) * rad, r.y + Math.sin(t2) * rad, r.w, r.h);
       }
     }
