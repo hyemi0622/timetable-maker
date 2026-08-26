@@ -1,0 +1,554 @@
+/* 시간표 커스텀 메이커 — vanilla JS, no build step */
+'use strict';
+
+/* ---------- 상수 ---------- */
+const DEVICES = [
+  ['iPhone 16 / 15 Pro', 1179, 2556], ['iPhone 16 / 15 Pro Max', 1290, 2796],
+  ['iPhone 14 / 13 (Pro)', 1170, 2532], ['iPhone 11 / XR', 828, 1792],
+  ['iPhone SE', 750, 1334], ['갤럭시 S24 / S23', 1080, 2340],
+  ['갤럭시 S24 Ultra', 1440, 3120], ['갤럭시 Z 플립', 1080, 2640],
+  ['아이패드 (4:3)', 1620, 2160]
+];
+const PALETTE = ['#CDDEE3','#8E9CBF','#E8EBDF','#97B4C7','#E5EAEF','#BBCDC0','#D4B2B2','#CA9E9E','#B4A0A0','#E0D9D9',
+                 '#F6F3E7','#DAE4DB','#95A797','#BDCAD2','#B3C0BA','#E6E6E6','#A6B6C0','#B9B9B9','#3A3A3A','#FFFFFF'];
+const FONTS = [['Pretendard','프리텐다드(기본)'],['BMKkubulim','배민 꾸불림체'],['YoonJihee','윤 지희'],['YoonSehee','윤 세희'],
+               ['OkDandan','Ok 단단체'],['Gaegu','개구쟁이'],['Nanum Pen Script','나눔손글씨 펜'],['Gamja Flower','감자꽃'],
+               ['Hi Melody','하이멜로디'],['Single Day','싱글데이']];
+const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+// 말풍선별 글자 영역 (이미지 크기 대비 비율)
+const BUBBLE_TXT = [[.5,.5,.60],[.5,.43,.68],[.5,.42,.60],[.5,.44,.80],[.5,.42,.60],[.5,.5,.72]];
+
+/* ---------- 상태 ---------- */
+const S = {
+  device: DEVICES[0],
+  bgSrc: 'assets/bg/bg1.jpg', bgImg: null, customBg: null,
+  bubbleIdx: -1, bubbleImg: null, bubbleText: '',
+  bubble: { x: .52, y: .18, w: .40 },        // 캔버스 비율 좌표
+  stickers: [],                               // {img,x,y,w}
+  tt: { x: .5, y: .34, w: .74 },              // 중심x, 상단y, 폭 (비율)
+  startHour: 9, endHour: 18, dayCount: 5,
+  items: [], lineColor: '#3A3A3A', font: 'Pretendard',
+  sel: null, done: false
+};
+const $ = s => document.querySelector(s);
+const toast = (m, t = 1800) => { const e = $('#toast'); e.textContent = m; e.classList.add('show'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('show'), t); };
+const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = no; i.src = src; });
+const fileURL = f => URL.createObjectURL(f);
+
+/* ---------- 화면 전환 ---------- */
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  window.scrollTo(0, 0);
+  if (id === 's3') { fitStage(); draw(); }
+}
+
+/* ================= 1. 시간표 이미지 파싱 ================= */
+$('#ttFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = await loadImg(fileURL(f));
+  $('#ttPreview').src = img.src; $('#ttDrop').classList.add('filled');
+  $('#parseInfo').textContent = '분석 중…';
+  try {
+    const r = parseTimetableImage(img);
+    S.items = r.items; S.startHour = r.startHour; S.endHour = r.endHour; S.dayCount = r.dayCount;
+    S._srcImg = img;
+    renderParseInfo();
+  } catch (err) { console.error(err); $('#parseInfo').innerHTML = '자동 인식 실패 — <u id="openEdit">직접 입력하기</u>'; bindEditLinks(); }
+});
+
+function renderParseInfo() {
+  $('#parseInfo').innerHTML = `${S.items.length}개 과목 인식됨 · <u id="openEdit">확인/수정</u> · <u id="doOcr">과목명 자동 인식</u>`;
+  bindEditLinks();
+}
+function bindEditLinks() {
+  const a = $('#openEdit'), b = $('#doOcr');
+  if (a) a.onclick = openEdit;
+  if (b) b.onclick = runOCR;
+}
+
+/** 에타 캡쳐본에서 색 블록 + 그리드 라인을 찾아 과목 배열 생성 */
+function parseTimetableImage(img) {
+  const W = 480, H = Math.round(img.height * W / img.width);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(img, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data;
+  const at = (i, j) => { const k = (j * W + i) * 4; return [d[k], d[k + 1], d[k + 2]]; };
+
+  // 1) 컬러 블록 마스크
+  const mask = new Uint8Array(W * H);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const [r, g, b] = at(i, j), mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx - mn > 12 && mx > 70 && mn < 250) mask[j * W + i] = 1;
+  }
+  // 2) 연결 요소
+  const seen = new Uint8Array(W * H), comps = [];
+  for (let p = 0; p < W * H; p++) {
+    if (!mask[p] || seen[p]) continue;
+    let qs = [p]; seen[p] = 1; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, n = 0, sr = 0, sg = 0, sb = 0;
+    while (qs.length) {
+      const q = qs.pop(), qi = q % W, qj = (q / W) | 0;
+      n++; x0 = Math.min(x0, qi); x1 = Math.max(x1, qi); y0 = Math.min(y0, qj); y1 = Math.max(y1, qj);
+      const [r, g, b] = at(qi, qj); sr += r; sg += g; sb += b;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = qi + di, nj = qj + dj;
+        if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+        const np = nj * W + ni; if (mask[np] && !seen[np]) { seen[np] = 1; qs.push(np); }
+      }
+    }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    if (n > 250 && w > 18 && h > 12 && n / (w * h) > .55)
+      comps.push({ x0, y0, x1, y1, w, h, color: `rgb(${(sr / n) | 0},${(sg / n) | 0},${(sb / n) | 0})` });
+  }
+  if (!comps.length) throw new Error('no blocks');
+
+  // 3) 열(요일) 클러스터링
+  const cols = [];
+  comps.sort((a, b) => a.x0 - b.x0).forEach(m => {
+    const cx = (m.x0 + m.x1) / 2;
+    const f = cols.find(c2 => Math.abs(c2.cx - cx) < m.w * .6);
+    if (f) { f.cx = (f.cx * f.n + cx) / (f.n + 1); f.n++; } else cols.push({ cx, n: 1 });
+  });
+  cols.sort((a, b) => a.cx - b.cx);
+  const colW = cols.length > 1 ? (cols[cols.length - 1].cx - cols[0].cx) / (cols.length - 1) : comps[0].w;
+  const gridL = cols[0].cx - colW / 2;
+
+  // 4) 가로 그리드 라인으로 시간 단위(pitch) 추정
+  const rowsGray = [];
+  for (let j = 1; j < H - 1; j++) {
+    let cnt = 0;
+    for (let i = (gridL | 0) + 2; i < W - 2; i++) { const [r, g, b] = at(i, j); if (Math.abs(r - g) < 8 && Math.abs(g - b) < 8 && r > 195 && r < 246) cnt++; }
+    if (cnt > (W - gridL) * .6) rowsGray.push(j);
+  }
+  const lines = []; rowsGray.forEach(y => { if (!lines.length || y - lines[lines.length - 1] > 4) lines.push(y); });
+  let pitch = 0, top = 0;
+  if (lines.length > 2) {
+    const gaps = []; for (let i = 1; i < lines.length; i++) gaps.push(lines[i] - lines[i - 1]);
+    gaps.sort((a, b) => a - b); pitch = gaps[gaps.length >> 1]; top = lines[0];
+  } else { pitch = Math.min(...comps.map(m => m.h)); top = Math.min(...comps.map(m => m.y0)); }
+  if (pitch < 6) pitch = Math.min(...comps.map(m => m.h));
+
+  // 5) 과목 생성 (pitch = 1시간)
+  const startHour = 9, q = v => Math.round(v * 2) / 2;   // 30분 단위 반올림
+  const items = comps.map((m, i) => {
+    const day = Math.max(0, Math.round((( m.x0 + m.x1) / 2 - gridL - colW / 2) / colW));
+    const s = startHour + q((m.y0 - top) / pitch);
+    const e = Math.max(s + .5, startHour + q((m.y1 - top) / pitch));
+    return { day, s, e, name: '과목 ' + (i + 1), room: '', color: PALETTE[(Math.random() * 18) | 0], box: m };
+  }).filter(v => v.day < 7);
+
+  const dayCount = Math.max(5, Math.min(7, Math.max(...items.map(v => v.day)) + 1));
+  const endHour = Math.min(24, Math.max(18, Math.ceil(Math.max(...items.map(v => v.e)))));
+  return { items, startHour, endHour: endHour, dayCount };
+}
+
+/* ---- OCR (선택) ---- */
+async function runOCR() {
+  if (!S._srcImg || !S.items.length) return;
+  toast('글자 인식 준비 중… (최초 1회 다운로드)', 4000);
+  try {
+    if (!window.Tesseract) await new Promise((ok, no) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; s.onload = ok; s.onerror = no;
+      document.head.appendChild(s);
+    });
+    const worker = await Tesseract.createWorker('kor');
+    const img = S._srcImg, k = img.width / 480;
+    for (const it of S.items) {
+      const b = it.box, cv = document.createElement('canvas');
+      cv.width = b.w * k; cv.height = b.h * k;
+      const cx = cv.getContext('2d');
+      cx.filter = 'grayscale(1) contrast(1.6)';
+      cx.drawImage(img, b.x0 * k, b.y0 * k, b.w * k, b.h * k, 0, 0, cv.width, cv.height);
+      const { data } = await worker.recognize(cv);
+      const lines = data.text.split('\n').map(t => t.trim()).filter(Boolean);
+      if (lines[0]) it.name = lines[0];
+      if (lines[1]) it.room = lines[1];
+    }
+    await worker.terminate();
+    toast('과목명 인식 완료'); renderParseInfo(); if ($('#editModal').classList.contains('open')) renderRows();
+  } catch (e) { console.error(e); toast('글자 인식을 사용할 수 없어요. 직접 입력해 주세요.'); }
+}
+
+/* ---- 과목 수정 모달 ---- */
+function openEdit() { renderRows(); $('#editModal').classList.add('open'); }
+$('#closeModal').onclick = () => { $('#editModal').classList.remove('open'); renderParseInfo(); draw(); };
+$('#addItem').onclick = () => { S.items.push({ day: 0, s: 9, e: 10, name: '', room: '', color: PALETTE[(Math.random() * 18) | 0] }); renderRows(); };
+['startHour', 'endHour', 'dayCount'].forEach(id => $('#' + id).onchange = e => { S[id] = +e.target.value; draw(); });
+
+function renderRows() {
+  $('#startHour').value = S.startHour; $('#endHour').value = S.endHour; $('#dayCount').value = S.dayCount;
+  const box = $('#itemRows'); box.innerHTML = '';
+  S.items.forEach((it, i) => {
+    const r = document.createElement('div'); r.className = 'irow';
+    r.innerHTML = `<select>${DAYS.slice(0, S.dayCount).map((d, k) => `<option value="${k}"${k == it.day ? ' selected' : ''}>${d}</option>`).join('')}</select>
+      <input type="number" step="0.5" value="${it.s}"><input type="number" step="0.5" value="${it.e}">
+      <input placeholder="과목명" value="${it.name}"><input placeholder="강의실" value="${it.room}"><button class="x">×</button>`;
+    const [dsel, si, ei, ni, ri, del] = r.children;
+    dsel.onchange = e => { it.day = +e.target.value; draw(); };
+    si.onchange = e => { it.s = +e.target.value; draw(); };
+    ei.onchange = e => { it.e = +e.target.value; draw(); };
+    ni.oninput = e => { it.name = e.target.value; draw(); };
+    ri.oninput = e => { it.room = e.target.value; draw(); };
+    del.onclick = () => { S.items.splice(i, 1); renderRows(); draw(); };
+    box.appendChild(r);
+  });
+}
+
+/* ================= 캐릭터 누끼 ================= */
+const charGrid = $('#charGrid');
+function addSlot() {
+  const el = document.createElement('label'); el.className = 'char-slot';
+  el.innerHTML = `<input type="file" accept="image/*" hidden><img class="ph" src="assets/ui/add.png" alt="">`;
+  el.querySelector('input').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    el.classList.add('loading');
+    const img = await loadImg(fileURL(f));
+    const cut = await cutout(img);
+    el.classList.remove('loading');
+    el.querySelector('.ph').style.display = 'none';
+    let v = el.querySelector('.cut');
+    if (!v) { v = document.createElement('img'); v.className = 'cut'; el.appendChild(v); }
+    v.src = cut.src;
+    if (!el.querySelector('.del')) {
+      const b = document.createElement('span'); b.className = 'del'; b.textContent = '×';
+      b.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); S.stickers = S.stickers.filter(s => s.el !== el); el.remove(); };
+      el.appendChild(b);
+    }
+    const prev = S.stickers.find(s => s.el === el);
+    if (prev) prev.img = cut;
+    else S.stickers.push({ el, img: cut, x: .22 + S.stickers.length * .06, y: .22, w: .28 });
+  };
+  charGrid.appendChild(el);
+}
+[0, 1, 2].forEach(addSlot);
+$('#addCharSlot').onclick = addSlot;
+
+/** 테두리에서 플러드필로 배경 제거 → 스티커화 */
+function cutout(img) {
+  const MAX = 700, sc = Math.min(1, MAX / Math.max(img.width, img.height));
+  const W = Math.round(img.width * sc), H = Math.round(img.height * sc);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(img, 0, 0, W, H);
+  const im = x.getImageData(0, 0, W, H), d = im.data;
+  let hasAlpha = false;
+  for (let i = 3; i < d.length; i += 4 * 97) if (d[i] < 250) { hasAlpha = true; break; }
+  if (!hasAlpha) {
+    const seen = new Uint8Array(W * H), q = [];
+    const push = p => { if (!seen[p]) { seen[p] = 1; q.push(p); } };
+    const near = (p, r, g, b) => { const k = p * 4; return Math.abs(d[k] - r) + Math.abs(d[k + 1] - g) + Math.abs(d[k + 2] - b) < 105; };
+    const k0 = 0; const br = d[k0], bg = d[k0 + 1], bb = d[k0 + 2];
+    for (let i = 0; i < W; i++) { push(i); push((H - 1) * W + i); }
+    for (let j = 0; j < H; j++) { push(j * W); push(j * W + W - 1); }
+    const out = new Uint8Array(W * H);
+    while (q.length) {
+      const p = q.pop(); if (!near(p, br, bg, bb)) continue;
+      out[p] = 1; const i = p % W, j = (p / W) | 0;
+      if (i > 0) push(p - 1); if (i < W - 1) push(p + 1); if (j > 0) push(p - W); if (j < H - 1) push(p + W);
+    }
+    for (let p = 0; p < W * H; p++) if (out[p]) d[p * 4 + 3] = 0;
+    // 가장자리 부드럽게
+    for (let j = 1; j < H - 1; j++) for (let i = 1; i < W - 1; i++) {
+      const p = j * W + i; if (out[p]) continue;
+      let n = 0; if (out[p - 1]) n++; if (out[p + 1]) n++; if (out[p - W]) n++; if (out[p + W]) n++;
+      if (n) d[p * 4 + 3] = 255 - n * 45;
+    }
+    x.putImageData(im, 0, 0);
+  }
+  // 여백 잘라내기
+  const im2 = x.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (im2[(j * W + i) * 4 + 3] > 12) { if (i < x0) x0 = i; if (i > x1) x1 = i; if (j < y0) y0 = j; if (j > y1) y1 = j; }
+  if (x1 <= x0) { x0 = 0; y0 = 0; x1 = W - 1; y1 = H - 1; }
+  const o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+  o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+  return loadImg(o.toDataURL('image/png'));
+}
+
+/* ================= 2. 배경 / 말풍선 ================= */
+const bgGrid = $('#bgGrid');
+for (let i = 1; i <= 9; i++) {
+  const im = document.createElement('img'); im.src = `assets/bg/bg${i}.jpg`; im.loading = 'lazy';
+  if (i === 1) im.classList.add('sel');
+  im.onclick = () => { document.querySelectorAll('.bg-grid img,.custom-bg-wrap img').forEach(e => e.classList.remove('sel')); im.classList.add('sel'); S.bgSrc = im.src; S.bgImg = null; };
+  bgGrid.appendChild(im);
+}
+$('#bgFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const url = fileURL(f);
+  $('#customBgWrap').innerHTML = '';
+  const im = document.createElement('img'); im.src = url;
+  im.onclick = () => { document.querySelectorAll('.bg-grid img,.custom-bg-wrap img').forEach(x => x.classList.remove('sel')); im.classList.add('sel'); S.bgSrc = url; S.bgImg = null; };
+  $('#customBgWrap').appendChild(im); im.click();
+};
+const bubbleGrid = $('#bubbleGrid');
+for (let i = 1; i <= 6; i++) {
+  const cell = document.createElement('div'); cell.className = 'cell';
+  cell.innerHTML = `<img src="assets/bubble/b${i}.png" loading="lazy">`;
+  cell.onclick = () => {
+    const on = cell.classList.contains('sel');
+    document.querySelectorAll('.bubble-grid .cell').forEach(c => c.classList.remove('sel'));
+    if (on) { S.bubbleIdx = -1; S.bubbleImg = null; }        // 다시 누르면 해제
+    else { cell.classList.add('sel'); S.bubbleIdx = i - 1; S.bubbleImg = null; }
+  };
+  bubbleGrid.appendChild(cell);
+}
+$('#bubbleText').oninput = e => { S.bubbleText = e.target.value; };
+DEVICES.forEach((d, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${d[0]} — ${d[1]}×${d[2]}`; $('#deviceSel').appendChild(o); });
+$('#deviceSel').onchange = e => { S.device = DEVICES[+e.target.value]; fitStage(); draw(); };
+
+$('#toS2').onclick = () => { if (!S.items.length) { toast('시간표를 먼저 추가하거나 직접 입력해 주세요.'); } go('s2'); };
+$('#backS1').onclick = () => go('s1');
+$('#backS2').onclick = () => go('s2');
+$('#toS3').onclick = async () => { await ensureAssets(); go('s3'); };
+
+async function ensureAssets() {
+  if (!S.bgImg || S.bgImg.src !== S.bgSrc) S.bgImg = await loadImg(S.bgSrc).catch(() => null);
+  if (S.bubbleIdx >= 0 && !S.bubbleImg) S.bubbleImg = await loadImg(`assets/bubble/b${S.bubbleIdx + 1}.png`);
+  if (S.bubbleIdx < 0) S.bubbleImg = null;
+}
+
+/* ================= 3. 캔버스 렌더링 ================= */
+const cv = $('#stage'), ctx = cv.getContext('2d');
+function fitStage() {
+  cv.width = S.device[1]; cv.height = S.device[2];
+  const maxH = Math.min(window.innerHeight * .52, 520), maxW = Math.min(346, window.innerWidth - 56);
+  const sc = Math.min(maxW / cv.width, maxH / cv.height);
+  cv.style.width = cv.width * sc + 'px'; cv.style.height = cv.height * sc + 'px';
+}
+window.addEventListener('resize', () => { if ($('#s3').classList.contains('active')) { fitStage(); draw(); } });
+
+/* 손그림 흔들림 */
+const rnd = n => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
+function jit(seed, t, amp) {
+  const s = t / 26, i = Math.floor(s), f = s - i, u = f * f * (3 - 2 * f);
+  const a = rnd(seed + i), b = rnd(seed + i + 1);
+  return ((a + (b - a) * u) * 2 - 1) * amp;
+}
+function poly(pts) { ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); }
+function vSeg(x, y0, y1, seed, amp) { const p = []; const n = Math.max(2, Math.ceil((y1 - y0) / 7)); for (let i = 0; i <= n; i++) { const y = y0 + (y1 - y0) * i / n; p.push([x + jit(seed, y, amp), y]); } return p; }
+function hSeg(y, x0, x1, seed, amp) { const p = []; const n = Math.max(2, Math.ceil((x1 - x0) / 7)); for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n; p.push([x, y + jit(seed, x, amp)]); } return p; }
+
+function geom() {
+  const W = cv.width, H = cv.height;
+  const tw = S.tt.w * W, days = S.dayCount, rows = Math.max(1, S.endHour - S.startHour);
+  const timeW = tw * .115, headH = tw * .075, colW = (tw - timeW) / days;
+  const rowH = tw * (rows > 10 ? 1.35 / rows : .145);
+  const th = headH + rowH * rows;
+  const x = S.tt.x * W - tw / 2, y = S.tt.y * H;
+  return { x, y, tw, th, timeW, headH, colW, rowH, rows, days, amp: tw * .0045 };
+}
+
+function wrap(text, maxW, max) {
+  const out = []; let line = '';
+  for (const ch of text) {
+    if (ctx.measureText(line + ch).width > maxW && line) { out.push(line); line = ch; if (out.length === max - 1 && false) break; }
+    else line += ch;
+  }
+  if (line) out.push(line);
+  return out.slice(0, max);
+}
+const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) + .587 * ((n >> 8) & 255) + .114 * (n & 255)) / 255; };
+
+function drawTable() {
+  const g = geom(), f = S.font;
+  ctx.save();
+  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.2, g.tw * .0055);
+  ctx.lineJoin = ctx.lineCap = 'round';
+
+  // 격자
+  ctx.beginPath();
+  for (let j = 0; j <= g.days; j++) { const x = g.x + g.timeW + j * g.colW; poly(vSeg(x, g.y, g.y + g.th, j + 40, g.amp)); }
+  poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
+  poly(vSeg(g.x + g.tw, g.y, g.y + g.th, 60, g.amp));
+  for (let i = 0; i <= g.rows; i++) { const y = g.y + g.headH + i * g.rowH; poly(hSeg(y, g.x, g.x + g.tw, i * 3 + 100, g.amp)); }
+  poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
+  ctx.stroke();
+
+  // 과목 박스
+  S.items.forEach((it, i) => {
+    if (it.day >= g.days) return;
+    const cx0 = g.x + g.timeW + it.day * g.colW, cx1 = cx0 + g.colW;
+    const y0 = g.y + g.headH + (it.s - S.startHour) * g.rowH, y1 = g.y + g.headH + (it.e - S.startHour) * g.rowH;
+    if (y1 <= g.y + g.headH || y0 > g.y + g.th) return;
+    ctx.beginPath();
+    poly([...hSeg(y0, cx0, cx1, i * 7 + 3, g.amp), ...vSeg(cx1, y0, y1, it.day + 40, g.amp), ...hSeg(y1, cx1, cx0, i * 7 + 9, g.amp), ...vSeg(cx0, y1, y0, it.day + 39, g.amp)]);
+    ctx.closePath(); ctx.fillStyle = it.color; ctx.fill(); ctx.stroke();
+
+    // 텍스트
+    ctx.save(); ctx.clip();
+    const pad = g.colW * .11, tw = g.colW - pad * 2;
+    const dark = lum(it.color) < .62;
+    ctx.fillStyle = dark ? '#fff' : '#4a4a4a';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const fs = g.tw * .038;
+    ctx.font = `600 ${fs}px "${f}", Pretendard, sans-serif`;
+    const lines = wrap(it.name, tw, 3);
+    let ty = y0 + pad;
+    lines.forEach(l => { ctx.fillText(l, cx0 + pad, ty); ty += fs * 1.22; });
+    if (it.room) { ctx.font = `400 ${fs * .86}px "${f}", Pretendard, sans-serif`; ctx.fillText(it.room, cx0 + pad, ty + fs * .35); }
+    ctx.restore();
+  });
+
+  // 요일 / 시간
+  ctx.fillStyle = S.lineColor === '#FFFFFF' ? '#fff' : '#3c3c3c';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `600 ${g.tw * .050}px "${f}", Pretendard, sans-serif`;
+  for (let j = 0; j < g.days; j++) ctx.fillText(DAYS[j], g.x + g.timeW + g.colW * (j + .5), g.y + g.headH * .55);
+  ctx.font = `500 ${g.tw * .046}px "${f}", Pretendard, sans-serif`;
+  for (let i = 0; i < g.rows; i++) {
+    const h = S.startHour + i, lab = h > 12 ? h - 12 : h;
+    ctx.fillText(String(lab), g.x + g.timeW * .55, g.y + g.headH + i * g.rowH + g.rowH * .22);
+  }
+  ctx.restore();
+}
+
+function bubbleRect() {
+  const W = cv.width, H = cv.height, im = S.bubbleImg;
+  const w = S.bubble.w * W, h = im ? w * im.height / im.width : 0;
+  return { x: S.bubble.x * W - w / 2, y: S.bubble.y * H, w, h };
+}
+function stickerRect(s) { const W = cv.width, w = s.w * W, h = w * s.img.height / s.img.width; return { x: s.x * W - w / 2, y: s.y * cv.height, w, h }; }
+function tableRect() { const g = geom(); return { x: g.x, y: g.y, w: g.tw, h: g.th }; }
+
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  if (S.bgImg) {  // cover
+    const r = Math.max(W / S.bgImg.width, H / S.bgImg.height), w = S.bgImg.width * r, h = S.bgImg.height * r;
+    ctx.drawImage(S.bgImg, (W - w) / 2, (H - h) / 2, w, h);
+  }
+  S.stickers.forEach(s => { const r = stickerRect(s); ctx.drawImage(s.img, r.x, r.y, r.w, r.h); });
+  if (S.bubbleImg) {
+    const r = bubbleRect(); ctx.drawImage(S.bubbleImg, r.x, r.y, r.w, r.h);
+    if (S.bubbleText) {
+      const [cxr, cyr, wr] = BUBBLE_TXT[S.bubbleIdx] || [.5, .5, .7];
+      ctx.fillStyle = '#3a3a3a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const maxLines = S.bubbleText.length > 16 ? 2 : 1;
+      let fs = r.w * .105, lines;
+      for (;;) {
+        ctx.font = `600 ${fs}px "${S.font}", Pretendard, sans-serif`;
+        lines = wrap(S.bubbleText, r.w * wr, 3);
+        if (lines.length <= maxLines || fs < r.w * .045) break;
+        fs *= .9;
+      }
+      const cx = r.x + r.w * cxr, cy = r.y + r.h * cyr;
+      lines.forEach((l, i) => ctx.fillText(l, cx, cy + (i - (lines.length - 1) / 2) * fs * 1.25));
+    }
+  }
+  drawTable();
+  drawSel();
+}
+
+function selRect() {
+  if (!S.sel) return null;
+  if (S.sel.t === 'bubble') return bubbleRect();
+  if (S.sel.t === 'sticker') return stickerRect(S.stickers[S.sel.i]);
+  if (S.sel.t === 'table' && S.done) return tableRect();
+  if (S.sel.t === 'item') {
+    const g = geom(), it = S.items[S.sel.i];
+    return { x: g.x + g.timeW + it.day * g.colW, y: g.y + g.headH + (it.s - S.startHour) * g.rowH, w: g.colW, h: (it.e - it.s) * g.rowH };
+  }
+  return null;
+}
+function drawSel() {
+  const r = selRect(); if (!r) return;
+  ctx.save(); ctx.strokeStyle = '#5b8fd6'; ctx.lineWidth = cv.width * .006; ctx.setLineDash([cv.width * .02, cv.width * .015]);
+  ctx.strokeRect(r.x, r.y, r.w, r.h); ctx.setLineDash([]);
+  if (S.sel.t !== 'item') { ctx.fillStyle = '#5b8fd6'; ctx.beginPath(); ctx.arc(r.x + r.w, r.y + r.h, cv.width * .022, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+
+/* ---------- 터치/마우스 ---------- */
+let drag = null;
+const toCv = e => { const b = cv.getBoundingClientRect(); return { x: (e.clientX - b.left) * cv.width / b.width, y: (e.clientY - b.top) * cv.height / b.height }; };
+const inR = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  const p = toCv(e);
+  const cur = selRect();
+  if (cur && S.sel.t !== 'item' && Math.hypot(p.x - (cur.x + cur.w), p.y - (cur.y + cur.h)) < cv.width * .05) {
+    drag = { mode: 'resize', p, w0: (S.sel.t === 'bubble' ? S.bubble.w : S.sel.t === 'table' ? S.tt.w : S.stickers[S.sel.i].w), r0: cur };
+    return;
+  }
+  let hit = null;
+  for (let i = S.stickers.length - 1; i >= 0; i--) if (inR(p, stickerRect(S.stickers[i]))) { hit = { t: 'sticker', i }; break; }
+  if (!hit && S.bubbleImg && inR(p, bubbleRect())) hit = { t: 'bubble' };
+  if (!hit) {
+    const g = geom();
+    for (let i = 0; i < S.items.length; i++) {
+      const it = S.items[i]; if (it.day >= g.days) continue;
+      const r = { x: g.x + g.timeW + it.day * g.colW, y: g.y + g.headH + (it.s - S.startHour) * g.rowH, w: g.colW, h: (it.e - it.s) * g.rowH };
+      if (inR(p, r)) { hit = { t: 'item', i }; break; }
+    }
+    if (!hit && inR(p, tableRect())) hit = { t: 'table' };
+  }
+  S.sel = hit;
+  if (hit && (hit.t === 'sticker' || hit.t === 'bubble' || (hit.t === 'table' && S.done))) {
+    const o = hit.t === 'bubble' ? S.bubble : hit.t === 'table' ? S.tt : S.stickers[hit.i];
+    drag = { mode: 'move', p, x0: o.x, y0: o.y, o };
+  }
+  draw();
+});
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const p = toCv(e);
+  if (drag.mode === 'move') { drag.o.x = drag.x0 + (p.x - drag.p.x) / cv.width; drag.o.y = drag.y0 + (p.y - drag.p.y) / cv.height; }
+  else {
+    const k = (p.x - drag.r0.x) / drag.r0.w;
+    const nw = Math.max(.12, Math.min(1.6, drag.w0 * k));
+    if (S.sel.t === 'bubble') S.bubble.w = nw; else if (S.sel.t === 'table') S.tt.w = Math.min(1, nw); else S.stickers[S.sel.i].w = nw;
+  }
+  draw();
+});
+cv.addEventListener('pointerup', () => drag = null);
+
+/* ---------- 색상 / 글꼴 ---------- */
+PALETTE.forEach(c => {
+  const i = document.createElement('i'); i.style.background = c;
+  i.onclick = () => {
+    if (S.sel && S.sel.t === 'item') S.items[S.sel.i].color = c;
+    else S.lineColor = c;
+    draw();
+  };
+  $('#palette').appendChild(i);
+});
+FONTS.forEach(([id, label], k) => {
+  const b = document.createElement('button'); b.textContent = label; b.style.fontFamily = `"${id}", Pretendard`;
+  if (!k) b.classList.add('sel');
+  b.onclick = async () => {
+    document.querySelectorAll('.fonts button').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
+    S.font = id;
+    try { await document.fonts.load(`16px "${id}"`); } catch (e) { }
+    if (!document.fonts.check(`16px "${id}"`) && id !== 'Pretendard') toast(`${label} 폰트 파일이 없어요. fonts/ 폴더에 넣어 주세요.`);
+    draw();
+  };
+  $('#fonts').appendChild(b);
+});
+
+/* ---------- 완료 / 저장 ---------- */
+$('#doneBtn').onclick = () => {
+  S.done = !S.done;
+  $('#doneBtn').classList.toggle('on', S.done);
+  $('#doneHint').textContent = S.done ? '시간표를 드래그해 옮기고, 오른쪽 아래 점으로 크기를 조절하세요.' : '완료 버튼을 누른 후 시간표 사이즈를 조절해 보세요.';
+  S.sel = S.done ? { t: 'table' } : null; draw();
+};
+$('#saveBtn').onclick = () => {
+  const keep = S.sel; S.sel = null; draw();
+  cv.toBlob(b => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = '시간표배경화면.jpg'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    S.sel = keep; draw(); toast('저장했어요!');
+  }, 'image/jpeg', .95);
+};
+
+/* ---------- 초기화 ---------- */
+(async () => {
+  S.bgImg = await loadImg(S.bgSrc).catch(() => null);
+  await document.fonts.ready;
+  fitStage();
+})();

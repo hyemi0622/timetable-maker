@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>시간표 커스텀 메이커</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&family=Dongle:wght@400;700&family=Single+Day&family=Hi+Melody&family=Gamja+Flower&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="phone">
+
+  <!-- ===== 1. 메인 ===== -->
+  <section class="screen active" id="s1">
+    <h1 class="title">기본 <b class="blue">에타 시간표</b> 대신, 나만의<br><b class="pink">커스텀 시간표</b> 배경화면을 만들어 보세요.</h1>
+
+    <div class="pill center" style="margin-top:38px">시간표 추가</div>
+    <label class="drop tt-drop" id="ttDrop">
+      <input type="file" accept="image/*" id="ttFile" hidden>
+      <img class="ph" src="assets/ui/add.png" alt="">
+      <img class="preview" id="ttPreview" alt="">
+    </label>
+    <div class="parse-info" id="parseInfo"></div>
+
+    <div class="pill center" style="margin-top:36px">캐릭터 추가</div>
+    <div class="char-grid" id="charGrid"></div>
+    <button class="fab" id="addCharSlot">+</button>
+    <p class="hint center">캐릭터를 더 추가하고 싶으시다면 눌러주세요.</p>
+
+    <button class="cta" id="toS2">추출하기</button>
+  </section>
+
+  <!-- ===== 2. 커스텀 ===== -->
+  <section class="screen" id="s2">
+    <div class="pill">배경화면 선택</div>
+    <div class="bg-grid" id="bgGrid"></div>
+    <label class="drop add-bg">
+      <input type="file" accept="image/*" id="bgFile" hidden>
+      <span>직접 추가 +</span>
+    </label>
+    <div class="custom-bg-wrap" id="customBgWrap"></div>
+
+    <div class="pill" style="margin-top:20px">기기 선택</div>
+    <select id="deviceSel" class="select"></select>
+
+    <div class="pill" style="margin-top:20px">말풍선 선택</div>
+    <div class="bubble-grid" id="bubbleGrid"></div>
+    <input class="text-input" id="bubbleText" placeholder="말풍선에 들어갈 내용을 입력하세요." maxlength="40">
+
+    <div class="row-btn">
+      <button class="ghost" id="backS1">이전</button>
+      <button class="dark-pill" id="toS3">다음</button>
+    </div>
+  </section>
+
+  <!-- ===== 3. 완성본 ===== -->
+  <section class="screen" id="s3">
+    <div class="stage-wrap"><canvas id="stage"></canvas></div>
+
+    <div class="pill" style="margin-top:18px">색상 선택</div>
+    <p class="hint">과목을 탭하면 해당 박스 색상을 바꿀 수 있습니다.<br>(빈 곳을 탭하면 시간표 선 색상을 바꿀 수 있습니다.)</p>
+    <div class="panel"><div class="palette" id="palette"></div></div>
+
+    <div class="pill" style="margin-top:18px">글꼴 선택</div>
+    <p class="hint">말풍선 내용과 과목 글꼴을 바꿔 보세요.</p>
+    <div class="panel"><div class="fonts" id="fonts"></div></div>
+
+    <div class="center"><button class="round-dark" id="doneBtn">완료</button></div>
+    <p class="hint center" id="doneHint">완료 버튼을 누른 후 시간표 사이즈를 조절해 보세요.</p>
+
+    <div class="row-btn">
+      <button class="ghost" id="backS2">이전</button>
+      <button class="cta flex1" id="saveBtn">사진 저장</button>
+    </div>
+  </section>
+</div>
+
+<!-- 과목 수정 모달 -->
+<div class="modal" id="editModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>시간표 확인 / 수정</b>
+      <button id="closeModal">닫기</button>
+    </div>
+    <div class="modal-row">
+      <label>시작 시각 <input type="number" id="startHour" min="0" max="22" value="9"></label>
+      <label>종료 시각 <input type="number" id="endHour" min="1" max="24" value="18"></label>
+      <label>요일 수
+        <select id="dayCount"><option value="5">5 (월~금)</option><option value="6">6 (월~토)</option><option value="7">7 (월~일)</option></select>
+      </label>
+    </div>
+    <div id="itemRows"></div>
+    <button class="ghost full" id="addItem">+ 과목 추가</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="js/app.js"></script>
+</body>
+</html>
