@@ -462,7 +462,8 @@ async function ensureAssets() {
 /* ================= 3. 캔버스 렌더링 ================= */
 const cv = $('#stage'), ctx = cv.getContext('2d');
 function fitStage() {                 // 미리보기는 화면 해상도로 직접 렌더 (축소 뭉개짐 방지)
-  const maxW = Math.min(346, window.innerWidth - 56), maxH = window.innerHeight * 1.1;
+  const box = cv.parentElement.clientWidth || (window.innerWidth - 56);
+  const maxW = Math.min(360, box), maxH = window.innerHeight * 1.1;
   const ar = S.device[1] / S.device[2];
   let w = maxW, h = w / ar;
   if (h > maxH) { h = maxH; w = h * ar; }
