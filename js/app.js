@@ -230,7 +230,11 @@ function parseTimetableImage(img) {
   comps.length = 0; comps.push(...parts);
 
   // 5) 과목 생성 (pitch = 1시간)
-  const startHour = 9, q = v => Math.round(v * 4) / 4;   // 15분 단위 반올림
+    // 30분 격자에 가까우면 30분으로, 확실히 벗어날 때만 15분 단위로 스냅
+  const startHour = 9, q = v => {
+    const half = Math.round(v * 2) / 2;
+    return Math.abs(v - half) < .14 ? half : Math.round(v * 4) / 4;
+  };
   const items = comps.map((m, i) => {
     const day = Math.max(0, Math.round((( m.x0 + m.x1) / 2 - gridL - colW / 2) / colW));
     const s = startHour + q((m.y0 - top) / pitch);
