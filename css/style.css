@@ -93,3 +93,9 @@ body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple S
 .size-row input{flex:1;-webkit-appearance:none;appearance:none;height:3px;background:#E4E4E4;border-radius:999px;outline:0}
 .size-row input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#5B5B5B;cursor:pointer}
 .size-row input::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;background:#5B5B5B;cursor:pointer}
+
+.item-edit{display:flex;gap:6px;margin-top:8px}
+.item-edit input{flex:1;min-width:0;height:34px;border:1px solid #D7D7D7;border-radius:5px;background:#FBFBFB;padding:0 10px;font-size:12px;font-family:inherit;color:#525252}
+.item-edit input:last-child{flex:0 0 92px}
+
+[hidden]{display:none!important}

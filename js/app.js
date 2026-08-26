@@ -208,17 +208,23 @@ async function runOCR() {
     const img = S._srcImg, k = img.width / 480;
     for (const it of S.items) {
       const b = it.box, cv = document.createElement('canvas');
-      cv.width = b.w * k; cv.height = b.h * k;
+      const up = 2;                        // 2배 확대 + 대비 강화로 인식률 향상
+      cv.width = b.w * k * up; cv.height = b.h * k * up;
       const cx = cv.getContext('2d');
-      cx.filter = 'grayscale(1) contrast(1.6)';
+      cx.imageSmoothingQuality = 'high';
+      cx.filter = 'grayscale(1) contrast(1.9) brightness(1.05)';
       cx.drawImage(img, b.x0 * k, b.y0 * k, b.w * k, b.h * k, 0, 0, cv.width, cv.height);
       const { data } = await worker.recognize(cv);
-      const ls = (data.lines || []).map(l => ({ t: (l.text || '').trim(), h: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0 })).filter(l => l.t);
+      const ls = (data.lines || [])
+        .map(l => ({ t: (l.text || '').replace(/[^가-힣A-Za-z0-9()\-\/\s호관동]/g, '').trim(), h: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0, c: l.confidence || 0 }))
+        .filter(l => l.t && l.c > 45);
       if (!ls.length) continue;
       const hMax = Math.max(...ls.map(l => l.h));
-      const big = ls.filter(l => l.h >= hMax * .85), small = ls.filter(l => l.h < hMax * .85);
-      it.name = big.map(l => l.t).join(' ');
-      it.room = small.map(l => l.t).join(' ');
+      const isRoom = t => /(\d+\s*호|\d{3,4}$|관$|동$)/.test(t);
+      const name = [], room = [];
+      ls.forEach(l => (l.h < hMax * .85 && isRoom(l.t) ? room : name).push(l.t));
+      it.name = name.join('').replace(/\s{2,}/g, ' ').trim();   // 줄바꿈으로 끊긴 과목명은 그대로 이어 붙임
+      it.room = room.join(' ');
     }
     await worker.terminate();
     toast('과목명 인식 완료'); renderParseInfo(); if ($('#editModal').classList.contains('open')) renderRows();
@@ -292,7 +298,7 @@ function cutout(img) {
   if (!hasAlpha) {
     const seen = new Uint8Array(W * H), q = [];
     const push = p => { if (!seen[p]) { seen[p] = 1; q.push(p); } };
-    const near = (p, r, g, b) => { const k = p * 4; return Math.abs(d[k] - r) + Math.abs(d[k + 1] - g) + Math.abs(d[k + 2] - b) < 105; };
+    const near = (p, r, g, b) => { const k = p * 4; return Math.max(Math.abs(d[k] - r), Math.abs(d[k + 1] - g), Math.abs(d[k + 2] - b)) < 26; };
     const k0 = 0; const br = d[k0], bg = d[k0 + 1], bb = d[k0 + 2];
     for (let i = 0; i < W; i++) { push(i); push((H - 1) * W + i); }
     for (let j = 0; j < H; j++) { push(j * W); push(j * W + W - 1); }
@@ -433,56 +439,63 @@ const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) 
 
 function drawTable() {
   const g = geom(), f = S.fontTable;
+  const gs = t => { const k = t - S.startHour; return Number.isInteger(k) ? k * 3 + 100 : null; };
   ctx.save();
-  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1, g.tw * .0075 * S.ttLw);
+  ctx.strokeStyle = S.lineColor;
+  ctx.lineWidth = Math.max(1, g.tw * .0075 * S.ttLw);
   ctx.lineJoin = ctx.lineCap = 'round';
 
-  // 표 안쪽 기본 흰색
+  // 1) 표 안쪽 기본 흰색
   ctx.beginPath();
-  poly([...hSeg(g.y, g.x, g.x + g.tw, 99, g.amp), ...vSeg(g.x + g.tw, g.y, g.y + g.th, 60, g.amp),
+  poly([...hSeg(g.y, g.x, g.x + g.tw, 99, g.amp), ...vSeg(g.x + g.tw, g.y, g.y + g.th, g.days + 40, g.amp),
         ...hSeg(g.y + g.th, g.x + g.tw, g.x, g.rows * 3 + 100, g.amp), ...vSeg(g.x, g.y + g.th, g.y, 39, g.amp)]);
   ctx.closePath(); ctx.fillStyle = '#FFFFFF'; ctx.fill();
 
-  // 격자
-  ctx.beginPath();
-  for (let j = 0; j <= g.days; j++) { const x = g.x + g.timeW + j * g.colW; poly(vSeg(x, g.y, g.y + g.th, j + 40, g.amp)); }
-  poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
-  for (let i = 0; i <= g.rows; i++) { const y = g.y + g.headH + i * g.rowH; poly(hSeg(y, g.x, g.x + g.tw, i * 3 + 100, g.amp)); }
-  poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
-  ctx.stroke();
-
-  // 과목 박스
+  // 2) 과목 박스는 '채우기'만 (테두리를 따로 그리지 않아야 굵기가 일정)
+  const boxes = [];
   S.items.forEach((it, i) => {
     if (it.day >= g.days) return;
     const cx0 = g.x + g.timeW + it.day * g.colW, cx1 = cx0 + g.colW;
     const y0 = g.y + g.headH + (it.s - S.startHour) * g.rowH, y1 = g.y + g.headH + (it.e - S.startHour) * g.rowH;
     if (y1 <= g.y + g.headH || y0 > g.y + g.th) return;
-    const gs = t => { const k = t - S.startHour; return Number.isInteger(k) ? k * 3 + 100 : null; };
     const st = gs(it.s), sb = gs(it.e);
-    ctx.beginPath();
-    poly([...hSeg(y0, cx0, cx1, st === null ? i * 7 + 3 : st, g.amp), ...vSeg(cx1, y0, y1, it.day + 41, g.amp),
-          ...hSeg(y1, cx1, cx0, sb === null ? i * 7 + 9 : sb, g.amp), ...vSeg(cx0, y1, y0, it.day + 40, g.amp)]);
-    ctx.closePath(); ctx.fillStyle = it.color; ctx.fill(); ctx.stroke();
+    const path = [...hSeg(y0, cx0, cx1, st === null ? i * 7 + 3 : st, g.amp), ...vSeg(cx1, y0, y1, it.day + 41, g.amp),
+                  ...hSeg(y1, cx1, cx0, sb === null ? i * 7 + 9 : sb, g.amp), ...vSeg(cx0, y1, y0, it.day + 40, g.amp)];
+    ctx.beginPath(); poly(path); ctx.closePath();
+    ctx.fillStyle = it.color; ctx.fill();
+    boxes.push({ it, i, cx0, cx1, y0, y1, st, sb, path });
+  });
 
-    // 텍스트
-    ctx.save(); ctx.clip();
-    const pad = g.colW * .11, tw = g.colW - pad * 2;
-    const dark = lum(it.color) < .62;
-    ctx.fillStyle = dark ? '#fff' : '#4a4a4a';
+  // 3) 격자 — 모든 선을 한 번씩만 그린다
+  ctx.beginPath();
+  for (let j = 0; j <= g.days; j++) poly(vSeg(g.x + g.timeW + j * g.colW, g.y, g.y + g.th, j + 40, g.amp));
+  poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
+  for (let i = 0; i <= g.rows; i++) poly(hSeg(g.y + g.headH + i * g.rowH, g.x, g.x + g.tw, i * 3 + 100, g.amp));
+  poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
+  boxes.forEach(b => {   // 30분처럼 격자에 없는 경계만 보강
+    if (b.st === null) poly(hSeg(b.y0, b.cx0, b.cx1, b.i * 7 + 3, g.amp));
+    if (b.sb === null) poly(hSeg(b.y1, b.cx0, b.cx1, b.i * 7 + 9, g.amp));
+  });
+  ctx.stroke();
+
+  // 4) 과목 글자
+  boxes.forEach(b => {
+    const it = b.it, pad = g.colW * .11, tw = g.colW - pad * 2;
+    ctx.save(); ctx.beginPath(); poly(b.path); ctx.closePath(); ctx.clip();
+    ctx.fillStyle = lum(it.color) < .62 ? '#fff' : '#4a4a4a';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     const fs = g.tw * .038 * S.ttFs;
     ctx.font = `600 ${fs}px "${f}", Pretendard, sans-serif`;
-    const lines = wrap(it.name, tw, 3);
-    let ty = y0 + pad;
-    lines.forEach(l => { ctx.fillText(l, cx0 + pad, ty); ty += fs * 1.22; });
+    let ty = b.y0 + pad;
+    wrap(it.name, tw, 3).forEach(l => { ctx.fillText(l, b.cx0 + pad, ty); ty += fs * 1.22; });
     if (it.room) {
       ctx.font = `400 ${fs * .70}px "${f}", Pretendard, sans-serif`;
-      ctx.globalAlpha = .8; ctx.fillText(it.room, cx0 + pad, ty + fs * .08); ctx.globalAlpha = 1;
+      ctx.globalAlpha = .8; ctx.fillText(it.room, b.cx0 + pad, ty + fs * .08); ctx.globalAlpha = 1;
     }
     ctx.restore();
   });
 
-  // 요일 / 시간
+  // 5) 요일 / 시간
   ctx.fillStyle = S.lineColor === '#FFFFFF' ? '#fff' : '#3c3c3c';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = `600 ${g.tw * .050 * S.ttFs}px "${f}", Pretendard, sans-serif`;
@@ -511,6 +524,7 @@ function draw() {
     const r = Math.max(W / S.bgImg.width, H / S.bgImg.height), w = S.bgImg.width * r, h = S.bgImg.height * r;
     ctx.drawImage(S.bgImg, (W - w) / 2, (H - h) / 2, w, h);
   }
+  drawTable();
   S.stickers.forEach(s => { const r = stickerRect(s); ctx.drawImage(s.img, r.x, r.y, r.w, r.h); });
   if (S.bubbleImg) {
     const r = bubbleRect(); ctx.drawImage(S.bubbleImg, r.x, r.y, r.w, r.h);
@@ -535,7 +549,6 @@ function draw() {
       S._txt = { x: cx - mw / 2, y: cy - lines.length * fs * .68, w: mw, h: lines.length * fs * 1.32 };
     } else S._txt = null;
   }
-  drawTable();
   drawSel();
 }
 
@@ -586,6 +599,7 @@ cv.addEventListener('pointerdown', e => {
     if (!hit && inR(p, tableRect())) hit = { t: 'table' };
   }
   S.sel = hit;
+  if (typeof syncItemEdit === 'function') syncItemEdit();
   if (hit && hit.t === 'btext') {
     const br = bubbleRect();
     drag = { mode: 'txtmove', p, x0: S.bubbleTxt.dx, y0: S.bubbleTxt.dy, br };
@@ -635,6 +649,15 @@ PALETTE.forEach(c => {
     document.querySelector(sel).appendChild(b);
   });
 });
+
+const ieBox = $('#itemEdit'), ieN = $('#ieName'), ieR = $('#ieRoom');
+function syncItemEdit() {
+  const on = S.sel && S.sel.t === 'item';
+  ieBox.hidden = !on;
+  if (on) { const it = S.items[S.sel.i]; ieN.value = it.name || ''; ieR.value = it.room || ''; }
+}
+ieN.oninput = () => { if (S.sel && S.sel.t === 'item') { S.items[S.sel.i].name = ieN.value; draw(); } };
+ieR.oninput = () => { if (S.sel && S.sel.t === 'item') { S.items[S.sel.i].room = ieR.value; draw(); } };
 
 $('#ttFs').oninput = e => { S.ttFs = +e.target.value; draw(); };
 $('#ttLw').oninput = e => { S.ttLw = +e.target.value; draw(); };
