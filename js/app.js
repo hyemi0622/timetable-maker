@@ -103,7 +103,7 @@ function parseTimetableImage(img) {
       }
     }
     const w = x1 - x0 + 1, h = y1 - y0 + 1;
-    if (n > 250 && w > 18 && h > 12 && n / (w * h) > .55)
+    if (n > 250 && w > 18 && h > 12 && n / (w * h) > .40)
       comps.push({ x0, y0, x1, y1, w, h, color: `rgb(${(sr / n) | 0},${(sg / n) | 0},${(sb / n) | 0})` });
   }
   if (!comps.length) throw new Error('no blocks');
@@ -149,20 +149,35 @@ function parseTimetableImage(img) {
   } else { pitch = Math.min(...comps.map(m => m.h)); top = Math.min(...comps.map(m => m.y0)); }
   if (pitch < 6) pitch = Math.min(...comps.map(m => m.h));
 
-  // 4-b) 같은 색으로 붙어 있는 블록을 글자 덩어리 기준으로 분리
+  // 4-b) 붙어 있는 블록을 '수업명(진한 글씨)' 줄 위치로 나눈다
   const parts = [];
   comps.forEach(m => {
+    // 글자 픽셀 밝기 분포에서 '진한 글씨(수업명)'만 남길 임계를 정한다
+    const vs = [];
+    for (let j = m.y0; j <= m.y1; j++) for (let i = m.x0; i <= m.x1; i++) {
+      if (mask[j * W + i]) continue;
+      const c2 = at(i, j), v = (c2[0] + c2[1] + c2[2]) / 3;
+      if (v < 170) vs.push(v);
+    }
+    if (vs.length < 40) { parts.push(m); return; }
+    vs.sort((p2, q2) => p2 - q2);
+    const p5 = vs[(vs.length * .05) | 0], p50 = vs[vs.length >> 1];
+    const th = p5 + (p50 - p5) * .55;
     const prof = [];
     for (let j = m.y0; j <= m.y1; j++) {
       let n = 0;
-      for (let i = m.x0; i <= m.x1; i++) if (!mask[j * W + i]) n++;
+      for (let i = m.x0; i <= m.x1; i++) {
+        if (mask[j * W + i]) continue;
+        const c2 = at(i, j);
+        if ((c2[0] + c2[1] + c2[2]) / 3 <= th) n++;
+      }
       prof.push(n);
     }
-    const need = Math.max(2, (m.w * .06) | 0), gaps = [];
+    const need = Math.max(3, (m.w * .15) | 0), gaps = [];
     let st = -1;
     for (let k = 0; k < prof.length; k++) {
       if (prof[k] >= need) { if (st < 0) st = k; }
-      else if (st >= 0 && k - st > 0) { gaps.push([st, k - 1]); st = -1; }
+      else if (st >= 0) { gaps.push([st, k - 1]); st = -1; }
     }
     if (st >= 0) gaps.push([st, prof.length - 1]);
     const grp = [];
@@ -170,21 +185,24 @@ function parseTimetableImage(img) {
       const last = grp[grp.length - 1];
       if (last && g2[0] - last[1] < pitch * .5) last[1] = g2[1]; else grp.push([...g2]);
     });
-    if (grp.length < 2) { parts.push(m); return; }
-    const lead = grp[0][0];
-    // 분할선이 30분 격자에 맞을 때만 다른 과목으로 본다 (부가정보 줄 간격 때문에 쪼개지지 않도록)
-    const cuts = [0];
-    for (let k = 1; k < grp.length; k++) {
-      const y = m.y0 + grp[k][0] - lead, u = (y - top) / pitch * 2;
-      if (Math.abs(u - Math.round(u)) > .38) continue;             // 30분 격자에서 너무 멀면 같은 과목
-      const snap = top + Math.round(u) / 2 * pitch - m.y0;          // 격자에 맞춰 자른다
-      if (snap > pitch * .3) cuts.push(snap);
+    // 수업명이라고 보기엔 너무 좁은 덩어리(숫자 한 글자 등)는 새 과목으로 치지 않는다
+    const wide = grp.filter(g2 => {
+      let mx = 0; for (let k = g2[0]; k <= g2[1]; k++) mx = Math.max(mx, prof[k]);
+      return mx > m.w * .18;
+    });
+    if (wide.length < 2) { parts.push(m); return; }
+    const lead = wide[0][0], cuts = [0];
+    for (let k = 1; k < wide.length; k++) {
+      const y = m.y0 + wide[k][0] - lead, u = (y - top) / pitch * 2;
+      if (Math.abs(u - Math.round(u)) > .38) continue;
+      const snap = top + Math.round(u) / 2 * pitch - m.y0;
+      if (snap > pitch * .3 && snap < m.h - pitch * .3) cuts.push(snap);
     }
     if (cuts.length < 2) { parts.push(m); return; }
     for (let k = 0; k < cuts.length; k++) {
       const y0 = m.y0 + cuts[k];
       const y1 = k < cuts.length - 1 ? m.y0 + cuts[k + 1] - 1 : m.y1;
-      if (y1 - y0 > pitch * .3) parts.push({ ...m, y0, y1, h: y1 - y0 + 1 });
+      parts.push({ ...m, y0, y1, h: y1 - y0 + 1 });
     }
   });
   comps.length = 0; comps.push(...parts);
@@ -226,20 +244,30 @@ async function runOCR() {
       cx.filter = 'grayscale(1) contrast(1.8) brightness(1.08)';
       cx.drawImage(img, bx.x0 * k, bx.y0 * k, bx.w * k, bx.h * k, 0, 0, W2, H2);
 
-      // 글자 행을 픽셀로 재서 '수업명(큰 글씨)'과 '부가정보(작은 글씨)' 영역을 나눈다
-      const px = cx.getImageData(0, 0, W2, H2).data, prof = [];
-      for (let y = 0; y < H2; y++) {
-        let n = 0;
-        for (let x = 0; x < W2; x++) if (px[(y * W2 + x) * 4] < 135) n++;
-        prof.push(n);
-      }
-      const runs = [];
-      let rs = -1;
-      for (let y = 0; y <= H2; y++) {
-        const on = y < H2 && prof[y] > W2 * .015;
-        if (on) { if (rs < 0) rs = y; }
-        else if (rs >= 0) { if (y - rs > up) runs.push([rs, y - 1]); rs = -1; }
-      }
+      // 글자 진하기로 '수업명'과 '부가정보' 영역을 나눈다 (에타는 수업명만 진하고 크다)
+      const px = cx.getImageData(0, 0, W2, H2).data;
+      const rowsOf = thr => {
+        const pr = [], need = Math.max(2, (W2 * .03) | 0), out = [];
+        for (let y = 0; y < H2; y++) {
+          let n = 0;
+          for (let x = 0; x < W2; x++) if (px[(y * W2 + x) * 4] < thr) n++;
+          pr.push(n);
+        }
+        let rs = -1;
+        for (let y = 0; y <= H2; y++) {
+          const on = y < H2 && pr[y] >= need;
+          if (on) { if (rs < 0) rs = y; }
+          else if (rs >= 0) { if (y - rs > up) out.push([rs, y - 1]); rs = -1; }
+        }
+        return out;
+      };
+      const vs = [];
+      for (let i2 = 0; i2 < px.length; i2 += 4) if (px[i2] < 175) vs.push(px[i2]);
+      if (vs.length < 40) continue;
+      vs.sort((p2, q2) => p2 - q2);
+      const p5 = vs[(vs.length * .05) | 0], p50 = vs[vs.length >> 1];
+      const allRuns = rowsOf(175), darkRuns = rowsOf(p5 + (p50 - p5) * .45);
+      if (!allRuns.length) continue;
       const rec = async (y0, y1) => {
         if (!(y1 > y0)) return '';
         const c2 = document.createElement('canvas');
@@ -248,12 +276,15 @@ async function runOCR() {
         const { data } = await worker.recognize(c2);
         return (data.text || '').replace(/[^가-힣A-Za-z0-9()\-\/\s]/g, ' ');
       };
-      if (!runs.length) continue;
-      const hMax = Math.max(...runs.map(r2 => r2[1] - r2[0]));
-      const big = runs.filter(r2 => r2[1] - r2[0] >= hMax * .78);
-      const nameY = [big[0][0], big[big.length - 1][1]];
-      const subs = runs.filter(r2 => r2[0] > nameY[1]);
-      const nm = await rec(nameY[0] - up * 2, nameY[1] + up * 2);
+      const dr = darkRuns.length ? darkRuns : [allRuns[0]];
+      let nameEnd = dr[0][1];
+      const h0 = dr[0][1] - dr[0][0] + 1;
+      for (let i2 = 1; i2 < dr.length && i2 < 3; i2++) {   // 수업명이 여러 줄이면 같은 높이로 바로 아래 이어진다
+        if (dr[i2][0] - nameEnd < h0 * 1.35) nameEnd = dr[i2][1]; else break;
+      }
+      const nameY = [dr[0][0], nameEnd];
+      const subs = allRuns.filter(r2 => r2[0] > nameEnd + up);
+      const nm = await rec(nameY[0] - up * 2, nameY[1] + up * 3);
       it.name = nm.split('\n').map(t => t.trim()).join('').replace(/ {2,}/g, ' ').trim();   // 줄바꿈만 이어 붙이고 띄어쓰기는 유지
       if (subs.length) {
         const sub = await rec(subs[0][0] - up, subs[subs.length - 1][1] + up * 2);
