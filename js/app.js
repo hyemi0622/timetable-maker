@@ -453,43 +453,49 @@ function drawTable() {
         ...hSeg(g.y + g.th, g.x + g.tw, g.x, g.rows * 3 + 100, g.amp), ...vSeg(g.x, g.y + g.th, g.y, 39, g.amp)]);
   ctx.closePath(); ctx.fillStyle = '#FFFFFF'; ctx.fill();
 
-  // 2) 격자 — 모든 선을 한 번씩만 그린다 (굵기 균일)
-  ctx.beginPath();
-  for (let j = 0; j <= g.days; j++) poly(vSeg(g.x + g.timeW + j * g.colW, g.y, g.y + g.th, j + 40, g.amp));
-  poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
-  for (let i = 0; i <= g.rows; i++) poly(hSeg(g.y + g.headH + i * g.rowH, g.x, g.x + g.tw, i * 3 + 100, g.amp));
-  poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
-  ctx.stroke();
-
-  // 3) 과목 박스 채우기 — 선 두께만큼 안쪽으로 채워 격자선을 덮지 않게
-  const boxes = [], ins = ctx.lineWidth / 2;
+  // 2) 과목 박스 채우기 (선은 나중에 그리므로 안쪽으로 좁힐 필요 없음)
+  const boxes = [];
   S.items.forEach((it, i) => {
     if (it.day >= g.days) return;
     const cx0 = g.x + g.timeW + it.day * g.colW, cx1 = cx0 + g.colW;
     const y0 = g.y + g.headH + (it.s - S.startHour) * g.rowH, y1 = g.y + g.headH + (it.e - S.startHour) * g.rowH;
     if (y1 <= g.y + g.headH || y0 > g.y + g.th) return;
     const st = gs(it.s), sb = gs(it.e);
-    const path = [...hSeg(y0 + ins, cx0 + ins, cx1 - ins, st === null ? es(it.day, it.s) : st, g.amp),
-                  ...vSeg(cx1 - ins, y0 + ins, y1 - ins, it.day + 41, g.amp),
-                  ...hSeg(y1 - ins, cx1 - ins, cx0 + ins, sb === null ? es(it.day, it.e) : sb, g.amp),
-                  ...vSeg(cx0 + ins, y1 - ins, y0 + ins, it.day + 40, g.amp)];
+    const path = [...hSeg(y0, cx0, cx1, st === null ? es(it.day, it.s) : st, g.amp),
+                  ...vSeg(cx1, y0, y1, it.day + 41, g.amp),
+                  ...hSeg(y1, cx1, cx0, sb === null ? es(it.day, it.e) : sb, g.amp),
+                  ...vSeg(cx0, y1, y0, it.day + 40, g.amp)];
     ctx.beginPath(); poly(path); ctx.closePath();
     ctx.fillStyle = it.color; ctx.fill();
     boxes.push({ it, i, cx0, cx1, y0, y1, st, sb, path });
   });
 
-  // 3-b) 30분처럼 격자에 없는 과목 경계만 보강
+  // 3) 선 — 모든 선을 정확히 한 번씩만, 채우기 위에 그린다
   ctx.beginPath();
+  for (let j = 0; j <= g.days; j++) poly(vSeg(g.x + g.timeW + j * g.colW, g.y, g.y + g.th, j + 40, g.amp));
+  poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
+  poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
+  for (let i = 0; i <= g.rows; i++) {
+    const t = S.startHour + i, y = g.y + g.headH + i * g.rowH, sd = i * 3 + 100;
+    let from = g.x;                       // 과목 '안쪽'을 지나는 구간은 건너뛴다
+    for (let dd = 0; dd < g.days; dd++) {
+      const cx0 = g.x + g.timeW + dd * g.colW;
+      if (S.items.some(it => it.day === dd && it.s < t && t < it.e)) {
+        if (from !== null && cx0 > from) poly(hSeg(y, from, cx0, sd, g.amp));
+        from = null;
+      } else if (from === null) from = cx0;
+    }
+    if (from !== null) poly(hSeg(y, from, g.x + g.tw, sd, g.amp));
+  }
   const drawn = new Set();
-  const edge = (day, t, y, cx0, cx1) => {
-    const key = day + ':' + t;
-    if (drawn.has(key)) return;          // 맞닿은 과목의 경계선을 두 번 그리지 않는다
-    drawn.add(key);
-    poly(hSeg(y, cx0, cx1, es(day, t), g.amp));
-  };
-  boxes.forEach(b => {
-    if (b.st === null) edge(b.it.day, b.it.s, b.y0, b.cx0, b.cx1);
-    if (b.sb === null) edge(b.it.day, b.it.e, b.y1, b.cx0, b.cx1);
+  boxes.forEach(b => {                    // 30분처럼 격자에 없는 경계 (맞닿은 과목끼리 한 번만)
+    [[b.st, b.it.s, b.y0], [b.sb, b.it.e, b.y1]].forEach(([sd, t, y]) => {
+      if (sd !== null) return;
+      const key = b.it.day + ':' + t;
+      if (drawn.has(key)) return;
+      drawn.add(key);
+      poly(hSeg(y, b.cx0, b.cx1, es(b.it.day, t), g.amp));
+    });
   });
   ctx.stroke();
 
