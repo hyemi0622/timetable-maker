@@ -22,7 +22,7 @@ const BUBBLE_TXT = [[.5,.5,.60],[.5,.43,.68],[.5,.42,.60],[.5,.44,.80],[.5,.42,.
 /* ---------- 상태 ---------- */
 const S = {
   device: DEVICES[0],
-  bgSrc: 'assets/bg/bg1.jpg', bgImg: null, customBg: null,
+  bgSrc: 'assets/bg/bg1.jpg', bgImg: null, bgColor: null,
   bubbleIdx: -1, bubbleImg: null, bubbleText: '', bubbleTxt: { dx: 0, dy: 0, k: 1 },
   bubble: { x: .52, y: .18, w: .40 },        // 캔버스 비율 좌표
   stickers: [],                               // {img,x,y,w}
@@ -176,7 +176,9 @@ function parseTimetableImage(img) {
     const cuts = [0];
     for (let k = 1; k < grp.length; k++) {
       const y = m.y0 + grp[k][0] - lead, u = (y - top) / pitch * 2;
-      if (Math.abs(u - Math.round(u)) < .16) cuts.push(grp[k][0] - lead);
+      if (Math.abs(u - Math.round(u)) > .38) continue;             // 30분 격자에서 너무 멀면 같은 과목
+      const snap = top + Math.round(u) / 2 * pitch - m.y0;          // 격자에 맞춰 자른다
+      if (snap > pitch * .3) cuts.push(snap);
     }
     if (cuts.length < 2) { parts.push(m); return; }
     for (let k = 0; k < cuts.length; k++) {
@@ -211,27 +213,52 @@ async function runOCR() {
       s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; s.onload = ok; s.onerror = no;
       document.head.appendChild(s);
     });
-    const worker = await Tesseract.createWorker('kor');
+    const worker = await Tesseract.createWorker(['kor','eng']);
     await worker.setParameters({ tessedit_pageseg_mode: '6' });
     const img = S._srcImg, k = img.width / 480;
     for (const it of S.items) {
-      const b = it.box, cv = document.createElement('canvas');
-      const up = 2;                        // 2배 확대 + 대비 강화로 인식률 향상
-      cv.width = b.w * k * up; cv.height = b.h * k * up;
-      const cx = cv.getContext('2d');
+      const bx = it.box, cvs = document.createElement('canvas');
+      const up = 3;                                   // 3배 확대 + 대비 강화
+      const W2 = Math.round(bx.w * k * up), H2 = Math.round(bx.h * k * up);
+      cvs.width = W2; cvs.height = H2;
+      const cx = cvs.getContext('2d', { willReadFrequently: true });
       cx.imageSmoothingQuality = 'high';
-      cx.filter = 'grayscale(1) contrast(1.9) brightness(1.05)';
-      cx.drawImage(img, b.x0 * k, b.y0 * k, b.w * k, b.h * k, 0, 0, cv.width, cv.height);
-      const { data } = await worker.recognize(cv);
-      const ls = (data.lines || [])
-        .map(l => ({ t: (l.text || '').replace(/[^가-힣A-Za-z0-9()\-\/\s호관동]/g, '').trim(), h: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0, c: l.confidence || 0 }))
-        .filter(l => l.t && l.c > 45);
-      if (!ls.length) continue;
-      const hMax = Math.max(...ls.map(l => l.h));
-      const name = [], sub = [];
-      ls.forEach(l => (l.h < hMax * .85 ? sub : name).push(l.t));   // 에타는 수업명만 크게, 교수명·캠퍼스·호관은 작게
-      it.name = name.join('').replace(/\s{2,}/g, ' ').trim();       // 줄바꿈으로 끊긴 수업명은 이어 붙임
-      it.room = sub.join(' ').replace(/\s{2,}/g, ' ').trim();
+      cx.filter = 'grayscale(1) contrast(1.8) brightness(1.08)';
+      cx.drawImage(img, bx.x0 * k, bx.y0 * k, bx.w * k, bx.h * k, 0, 0, W2, H2);
+
+      // 글자 행을 픽셀로 재서 '수업명(큰 글씨)'과 '부가정보(작은 글씨)' 영역을 나눈다
+      const px = cx.getImageData(0, 0, W2, H2).data, prof = [];
+      for (let y = 0; y < H2; y++) {
+        let n = 0;
+        for (let x = 0; x < W2; x++) if (px[(y * W2 + x) * 4] < 135) n++;
+        prof.push(n);
+      }
+      const runs = [];
+      let rs = -1;
+      for (let y = 0; y <= H2; y++) {
+        const on = y < H2 && prof[y] > W2 * .015;
+        if (on) { if (rs < 0) rs = y; }
+        else if (rs >= 0) { if (y - rs > up) runs.push([rs, y - 1]); rs = -1; }
+      }
+      const rec = async (y0, y1) => {
+        if (!(y1 > y0)) return '';
+        const c2 = document.createElement('canvas');
+        c2.width = W2; c2.height = y1 - y0 + 1;
+        c2.getContext('2d').drawImage(cvs, 0, y0, W2, c2.height, 0, 0, W2, c2.height);
+        const { data } = await worker.recognize(c2);
+        return (data.text || '').replace(/[^가-힣A-Za-z0-9()\-\/\s]/g, ' ');
+      };
+      if (!runs.length) continue;
+      const hMax = Math.max(...runs.map(r2 => r2[1] - r2[0]));
+      const big = runs.filter(r2 => r2[1] - r2[0] >= hMax * .78);
+      const nameY = [big[0][0], big[big.length - 1][1]];
+      const subs = runs.filter(r2 => r2[0] > nameY[1]);
+      const nm = await rec(nameY[0] - up * 2, nameY[1] + up * 2);
+      it.name = nm.split('\n').map(t => t.trim()).join('').replace(/ {2,}/g, ' ').trim();   // 줄바꿈만 이어 붙이고 띄어쓰기는 유지
+      if (subs.length) {
+        const sub = await rec(subs[0][0] - up, subs[subs.length - 1][1] + up * 2);
+        it.room = sub.replace(/\s+/g, ' ').trim();
+      } else it.room = '';
     }
     await worker.terminate();
     toast('과목명 인식 완료'); renderParseInfo(); if ($('#editModal').classList.contains('open')) renderRows();
@@ -348,11 +375,15 @@ function cutout(img) {
 }
 
 /* ================= 2. 배경 / 말풍선 ================= */
+function clearBgSel() {
+  document.querySelectorAll('.bg-grid img,.custom-bg-wrap img').forEach(e => e.classList.remove('sel'));
+  $('.bg-solid').classList.remove('sel');
+}
 const bgGrid = $('#bgGrid');
 for (let i = 1; i <= 9; i++) {
   const im = document.createElement('img'); im.src = `assets/bg/bg${i}.jpg`; im.loading = 'lazy';
   if (i === 1) im.classList.add('sel');
-  im.onclick = () => { document.querySelectorAll('.bg-grid img,.custom-bg-wrap img').forEach(e => e.classList.remove('sel')); im.classList.add('sel'); S.bgSrc = im.src; S.bgImg = null; };
+  im.onclick = () => { clearBgSel(); im.classList.add('sel'); S.bgSrc = im.src; S.bgImg = null; S.bgColor = null; };
   bgGrid.appendChild(im);
 }
 $('#bgFile').onchange = e => {
@@ -360,7 +391,7 @@ $('#bgFile').onchange = e => {
   const url = fileURL(f);
   $('#customBgWrap').innerHTML = '';
   const im = document.createElement('img'); im.src = url;
-  im.onclick = () => { document.querySelectorAll('.bg-grid img,.custom-bg-wrap img').forEach(x => x.classList.remove('sel')); im.classList.add('sel'); S.bgSrc = url; S.bgImg = null; };
+  im.onclick = () => { clearBgSel(); im.classList.add('sel'); S.bgSrc = url; S.bgImg = null; S.bgColor = null; };
   $('#customBgWrap').appendChild(im); im.click();
 };
 const bubbleGrid = $('#bubbleGrid');
@@ -375,6 +406,11 @@ for (let i = 1; i <= 6; i++) {
   };
   bubbleGrid.appendChild(cell);
 }
+const bgColorInput = $('#bgColor');
+const useSolid = () => { clearBgSel(); $('.bg-solid').classList.add('sel'); S.bgColor = bgColorInput.value; S.bgImg = null; };
+bgColorInput.oninput = useSolid;
+$('.bg-solid').addEventListener('click', e => { if (e.target !== bgColorInput) useSolid(); });
+
 $('#bubbleText').oninput = e => { S.bubbleText = e.target.value; };
 DEVICES.forEach((d, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${d[0]} — ${d[1]}×${d[2]}`; $('#deviceSel').appendChild(o); });
 $('#deviceSel').onchange = e => { S.device = DEVICES[+e.target.value]; fitStage(); draw(); };
@@ -385,7 +421,8 @@ $('#backS2').onclick = () => go('s2');
 $('#toS3').onclick = async () => { await ensureAssets(); go('s3'); };
 
 async function ensureAssets() {
-  if (!S.bgImg || S.bgImg.src !== S.bgSrc) S.bgImg = await loadImg(S.bgSrc).catch(() => null);
+  if (S.bgColor) S.bgImg = null;
+  else if (!S.bgImg || S.bgImg.src !== S.bgSrc) S.bgImg = await loadImg(S.bgSrc).catch(() => null);
   if (S.bubbleIdx >= 0 && !S.bubbleImg) S.bubbleImg = await loadImg(`assets/bubble/b${S.bubbleIdx + 1}.png`);
   if (S.bubbleIdx < 0) S.bubbleImg = null;
 }
@@ -573,7 +610,8 @@ function draw() {
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-  if (S.bgImg) {  // cover
+  if (S.bgColor) { ctx.fillStyle = S.bgColor; ctx.fillRect(0, 0, W, H); }
+  else if (S.bgImg) {  // cover
     const r = Math.max(W / S.bgImg.width, H / S.bgImg.height), w = S.bgImg.width * r, h = S.bgImg.height * r;
     ctx.drawImage(S.bgImg, (W - w) / 2, (H - h) / 2, w, h);
   }
@@ -583,10 +621,12 @@ function draw() {
     const r = bubbleRect(); ctx.drawImage(S.bubbleImg, r.x, r.y, r.w, r.h);
     if (S.bbLw > 1.02) {                       // 선만 뽑아 여러 방향으로 겹쳐 굵게
       const L = bubbleLine();
-      const rad = (S.bbLw - 1) * r.w * .0045;
-      for (let a = 0; a < 12; a++) {
-        const t2 = a * Math.PI / 6;
-        ctx.drawImage(L, r.x + Math.cos(t2) * rad, r.y + Math.sin(t2) * rad, r.w, r.h);
+      const rad = (S.bbLw - 1) * r.w * .006;
+      for (const ring of [rad * .5, rad]) {
+        for (let a = 0; a < 16; a++) {
+          const t2 = a * Math.PI / 8;
+          ctx.drawImage(L, r.x + Math.cos(t2) * ring, r.y + Math.sin(t2) * ring, r.w, r.h);
+        }
       }
     }
     if (S.bubbleText) {
