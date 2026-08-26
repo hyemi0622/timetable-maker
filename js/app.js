@@ -12,8 +12,7 @@ const DEVICES = [
 ];
 const PALETTE = ['#CDDEE3','#8E9CBF','#E8EBDF','#97B4C7','#E5EAEF','#BBCDC0','#D4B2B2','#CA9E9E','#B4A0A0','#E0D9D9',
                  '#F6F3E7','#DAE4DB','#95A797','#BDCAD2','#B3C0BA','#E6E6E6','#A6B6C0','#B9B9B9','#FFFFFF',
-                 '#D9CBB8','#C4B39A','#A89078','#8B7355','#6B5B4B','#5C4A3A','#3A2E24','#CFCFCF','#8A8A8A','#5B5B5B',
-                 '#3A3A3A'];
+                 '#D9CBB8','#C4B39A','#A89078','#8B7355','#6B5B4B','#5C4A3A','#3A2E24','#CFCFCF','#8A8A8A','#5B5B5B'];
 const FONTS = [['Pretendard','프리텐다드'],['BMKkubulim','배민 꾸불림체'],['OkDandan','Ok 단단체'],
                ['YoonJihee','윤 지희'],['YoonSehee','윤 세희']];
 const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
@@ -220,11 +219,10 @@ async function runOCR() {
         .filter(l => l.t && l.c > 45);
       if (!ls.length) continue;
       const hMax = Math.max(...ls.map(l => l.h));
-      const isRoom = t => /(\d+\s*호|\d{3,4}$|관$|동$)/.test(t);
-      const name = [], room = [];
-      ls.forEach(l => (l.h < hMax * .85 && isRoom(l.t) ? room : name).push(l.t));
-      it.name = name.join('').replace(/\s{2,}/g, ' ').trim();   // 줄바꿈으로 끊긴 과목명은 그대로 이어 붙임
-      it.room = room.join(' ');
+      const name = [], sub = [];
+      ls.forEach(l => (l.h < hMax * .85 ? sub : name).push(l.t));   // 에타는 수업명만 크게, 교수명·캠퍼스·호관은 작게
+      it.name = name.join('').replace(/\s{2,}/g, ' ').trim();       // 줄바꿈으로 끊긴 수업명은 이어 붙임
+      it.room = sub.join(' ').replace(/\s{2,}/g, ' ').trim();
     }
     await worker.terminate();
     toast('과목명 인식 완료'); renderParseInfo(); if ($('#editModal').classList.contains('open')) renderRows();
@@ -510,8 +508,12 @@ function drawTable() {
     let ty = b.y0 + pad;
     wrap(it.name, tw, 3).forEach(l => { ctx.fillText(l, b.cx0 + pad, ty); ty += fs * 1.22; });
     if (it.room) {
-      ctx.font = `400 ${fs * .70}px "${f}", Pretendard, sans-serif`;
-      ctx.globalAlpha = .8; ctx.fillText(it.room, b.cx0 + pad, ty + fs * .08); ctx.globalAlpha = 1;
+      const sf = fs * .70;
+      ctx.font = `400 ${sf}px "${f}", Pretendard, sans-serif`;
+      ctx.globalAlpha = .8;
+      let sy = ty + fs * .08;
+      wrap(it.room, tw, 4).forEach(l => { ctx.fillText(l, b.cx0 + pad, sy); sy += sf * 1.2; });
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   });
@@ -681,6 +683,13 @@ PALETTE.forEach(c => {
   };
   $('#palette').appendChild(i);
 });
+const pick = document.createElement('input');      // 직접 고르기
+pick.type = 'color'; pick.className = 'pick'; pick.value = '#3A3A3A'; pick.title = '직접 고르기';
+pick.oninput = () => {
+  if (S.sel && S.sel.t === 'item') S.items[S.sel.i].color = pick.value; else S.lineColor = pick.value;
+  draw();
+};
+$('#palette').appendChild(pick);
 [['#fontsTable', 'fontTable', 'OkDandan'], ['#fontsBubble', 'fontBubble', 'Pretendard']].forEach(([sel, key, def]) => {
   FONTS.forEach(([id, label]) => {
     const b = document.createElement('button'); b.textContent = label; b.style.fontFamily = `"${id}", Pretendard`;
