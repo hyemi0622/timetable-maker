@@ -79,11 +79,16 @@ function parseTimetableImage(img) {
   const d = x.getImageData(0, 0, W, H).data;
   const at = (i, j) => { const k = (j * W + i) * 4; return [d[k], d[k + 1], d[k + 2]]; };
 
-  // 1) 컬러 블록 마스크
+  // 0) 배경 밝기 (라이트/다크 자동 판별)
+  const hist = new Array(32).fill(0);
+  for (let j = 0; j < H; j += 2) for (let i = 0; i < W; i += 2) { const c = at(i, j); hist[((c[0] + c[1] + c[2]) / 3 / 8) | 0]++; }
+  const bgV = hist.indexOf(Math.max(...hist)) * 8 + 4;
+
+  // 1) 과목 블록 마스크 — 연한 파스텔(채도 낮은 색)도 배경과 다르면 포함
   const mask = new Uint8Array(W * H);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-    const [r, g, b] = at(i, j), mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    if (mx - mn > 12 && mx > 70 && mn < 250) mask[j * W + i] = 1;
+    const [r, g, b] = at(i, j), mx = Math.max(r, g, b), mn = Math.min(r, g, b), v = (r + g + b) / 3;
+    if ((mx - mn > 8 || Math.abs(v - bgV) > 40) && mx > 60) mask[j * W + i] = 1;
   }
   // 2) 연결 요소
   const seen = new Uint8Array(W * H), comps = [];
@@ -117,13 +122,30 @@ function parseTimetableImage(img) {
     if (f) { f.cx = (f.cx * f.n + cx) / (f.n + 1); f.n++; } else cols.push({ cx, n: 1 });
   });
   cols.sort((a, b) => a.cx - b.cx);
-  const colW = cols.length > 1 ? (cols[cols.length - 1].cx - cols[0].cx) / (cols.length - 1) : comps[0].w;
-  const gridL = cols[0].cx - colW / 2;
+  let colW = cols.length > 1 ? (cols[cols.length - 1].cx - cols[0].cx) / (cols.length - 1) : comps[0].w;
+  let gridL = cols[0].cx - colW / 2;
+  // 세로 격자선을 직접 찾으면 비어 있는 요일이 있어도 열이 어긋나지 않는다
+  const yA = Math.min(...comps.map(m => m.y0)), yB = Math.max(...comps.map(m => m.y1));
+  const vraw = [];
+  for (let i = 1; i < W - 1; i++) {
+    let cnt = 0;
+    for (let j = yA; j <= yB; j++) {
+      const [r, g, b] = at(i, j), v = (r + g + b) / 3, dv = Math.abs(v - bgV);
+      if (Math.abs(r - g) < 14 && Math.abs(g - b) < 14 && dv > 4 && dv < 80) cnt++;
+    }
+    if (cnt > (yB - yA) * .6) vraw.push(i);
+  }
+  const vl = [];
+  vraw.forEach(x2 => { if (!vl.length || x2 - vl[vl.length - 1] > 4) vl.push(x2); });
+  if (vl.length > 3) {
+    const gaps2 = [];
+    for (let i = 1; i < vl.length; i++) gaps2.push(vl[i] - vl[i - 1]);
+    const sorted = [...gaps2].sort((a, b) => a - b), med = sorted[sorted.length >> 1];
+    const k0 = gaps2.findIndex(g2 => Math.abs(g2 - med) < med * .25);
+    if (k0 >= 0) { colW = med; gridL = vl[k0]; }
+  }
 
   // 4) 가로 그리드 라인으로 시간 단위(pitch) 추정
-  const hist = new Array(32).fill(0);
-  for (let j = 0; j < H; j += 2) for (let i = 0; i < W; i += 2) { const [r, g, b] = at(i, j); hist[((r + g + b) / 3 / 8) | 0]++; }
-  const bgV = hist.indexOf(Math.max(...hist)) * 8 + 4;   // 배경 밝기(라이트/다크 자동)
   const rowsGray = [];
   for (let j = 1; j < H - 1; j++) {
     let cnt = 0;
@@ -154,11 +176,11 @@ function parseTimetableImage(img) {
   const parts = [];
   comps.forEach(m => {
     // 글자 픽셀 밝기 분포에서 '진한 글씨(수업명)'만 남길 임계를 정한다
+    const bc0 = m.color.match(/\d+/g).map(Number), bv0 = (bc0[0] + bc0[1] + bc0[2]) / 3;
     const vs = [];
     for (let j = m.y0; j <= m.y1; j++) for (let i = m.x0; i <= m.x1; i++) {
-      if (mask[j * W + i]) continue;
       const c2 = at(i, j), v = (c2[0] + c2[1] + c2[2]) / 3;
-      if (v < 170) vs.push(v);
+      if (v < bv0 - 18) vs.push(v);       // 블록 색보다 어두운 = 글자
     }
     if (vs.length < 40) { parts.push(m); return; }
     vs.sort((p2, q2) => p2 - q2);
@@ -168,7 +190,6 @@ function parseTimetableImage(img) {
     for (let j = m.y0; j <= m.y1; j++) {
       let n = 0;
       for (let i = m.x0; i <= m.x1; i++) {
-        if (mask[j * W + i]) continue;
         const c2 = at(i, j);
         if ((c2[0] + c2[1] + c2[2]) / 3 <= th) n++;
       }
@@ -197,7 +218,7 @@ function parseTimetableImage(img) {
       const y = m.y0 + wide[k][0] - lead, u = (y - top) / pitch * 2;
       if (Math.abs(u - Math.round(u)) > .38) continue;
       const snap = top + Math.round(u) / 2 * pitch - m.y0;
-      if (snap > pitch * .3 && snap < m.h - pitch * .3) cuts.push(snap);
+      if (snap > pitch * .7 && snap < m.h - pitch * .7 && snap - cuts[cuts.length - 1] > pitch * .7) cuts.push(snap);
     }
     if (cuts.length < 2) { parts.push(m); return; }
     for (let k = 0; k < cuts.length; k++) {
@@ -209,7 +230,7 @@ function parseTimetableImage(img) {
   comps.length = 0; comps.push(...parts);
 
   // 5) 과목 생성 (pitch = 1시간)
-  const startHour = 9, q = v => Math.round(v * 2) / 2;   // 30분 단위 반올림
+  const startHour = 9, q = v => Math.round(v * 4) / 4;   // 15분 단위 반올림
   const items = comps.map((m, i) => {
     const day = Math.max(0, Math.round((( m.x0 + m.x1) / 2 - gridL - colW / 2) / colW));
     const s = startHour + q((m.y0 - top) / pitch);
