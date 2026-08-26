@@ -29,6 +29,7 @@ const S = {
   stickers: [],                               // {img,x,y,w}
   tt: { x: .5, y: .34, w: .74 },              // 중심x, 상단y, 폭 (비율)
   startHour: 9, endHour: 18, dayCount: 5,
+  ttFs: 1,
   items: [], lineColor: '#3A3A3A', fontTable: 'BMKkubulim', fontBubble: 'Pretendard',
   sel: null, done: false
 };
@@ -333,7 +334,7 @@ async function ensureAssets() {
 const cv = $('#stage'), ctx = cv.getContext('2d');
 function fitStage() {
   cv.width = S.device[1]; cv.height = S.device[2];
-  const maxH = Math.min(window.innerHeight * .52, 520), maxW = Math.min(346, window.innerWidth - 56);
+  const maxH = Math.min(window.innerHeight * .46, 459), maxW = Math.min(211, window.innerWidth - 56);
   const sc = Math.min(maxW / cv.width, maxH / cv.height);
   cv.style.width = cv.width * sc + 'px'; cv.style.height = cv.height * sc + 'px';
 }
@@ -358,8 +359,8 @@ function geom() {
   const rowH = tw * (rows > 10 ? 1.35 / rows : .145);
   const th = headH + rowH * rows;
   const x = S.tt.x * W - tw / 2, y = S.tt.y * H;
-  WAVE = tw * .055;
-  return { x, y, tw, th, timeW, headH, colW, rowH, rows, days, amp: tw * .0058 };
+  WAVE = tw * .10;
+  return { x, y, tw, th, timeW, headH, colW, rowH, rows, days, amp: tw * .0026 };
 }
 
 function wrap(text, maxW, max) {
@@ -376,7 +377,7 @@ const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) 
 function drawTable() {
   const g = geom(), f = S.fontTable;
   ctx.save();
-  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.4, g.tw * .0078);
+  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.3, g.tw * .0062);
   ctx.lineJoin = ctx.lineCap = 'round';
 
   // 표 안쪽 기본 흰색
@@ -410,7 +411,7 @@ function drawTable() {
     const dark = lum(it.color) < .62;
     ctx.fillStyle = dark ? '#fff' : '#4a4a4a';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    const fs = g.tw * .038;
+    const fs = g.tw * .038 * S.ttFs;
     ctx.font = `600 ${fs}px "${f}", Pretendard, sans-serif`;
     const lines = wrap(it.name, tw, 3);
     let ty = y0 + pad;
@@ -422,9 +423,9 @@ function drawTable() {
   // 요일 / 시간
   ctx.fillStyle = S.lineColor === '#FFFFFF' ? '#fff' : '#3c3c3c';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `600 ${g.tw * .050}px "${f}", Pretendard, sans-serif`;
+  ctx.font = `600 ${g.tw * .050 * S.ttFs}px "${f}", Pretendard, sans-serif`;
   for (let j = 0; j < g.days; j++) ctx.fillText(DAYS[j], g.x + g.timeW + g.colW * (j + .5), g.y + g.headH * .55);
-  ctx.font = `500 ${g.tw * .046}px "${f}", Pretendard, sans-serif`;
+  ctx.font = `500 ${g.tw * .046 * S.ttFs}px "${f}", Pretendard, sans-serif`;
   for (let i = 0; i < g.rows; i++) {
     const h = S.startHour + i, lab = h > 12 ? h - 12 : h;
     ctx.fillText(String(lab), g.x + g.timeW * .55, g.y + g.headH + i * g.rowH + g.rowH * .22);
@@ -572,6 +573,8 @@ PALETTE.forEach(c => {
     document.querySelector(sel).appendChild(b);
   });
 });
+
+$('#ttFs').oninput = e => { S.ttFs = +e.target.value; draw(); };
 
 /* ---------- 완료 / 저장 ---------- */
 $('#doneBtn').onclick = () => {
