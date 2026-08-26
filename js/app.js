@@ -305,10 +305,18 @@ async function runOCR() {
         return (data.text || '').replace(/[^가-힣A-Za-z0-9()\-\/\s]/g, ' ');
       };
       const dr = darkRuns.length ? darkRuns : [allRuns[0]];
+      const tone = ([y0, y1]) => {         // 글자의 평균 진하기 (수업명은 진하고 강의실은 연하다)
+        let sum = 0, n = 0;
+        for (let y = y0; y <= y1; y++) for (let x = 0; x < W2; x++) {
+          const v = px[(y * W2 + x) * 4];
+          if (v < 175) { sum += v; n++; }
+        }
+        return n ? sum / n : 255;
+      };
       let nameEnd = dr[0][1];
-      const h0 = dr[0][1] - dr[0][0] + 1;
-      for (let i2 = 1; i2 < dr.length && i2 < 3; i2++) {   // 수업명이 여러 줄이면 같은 높이로 바로 아래 이어진다
-        if (dr[i2][0] - nameEnd < h0 * 1.35) nameEnd = dr[i2][1]; else break;
+      const h0 = dr[0][1] - dr[0][0] + 1, t0 = tone(dr[0]);
+      for (let i2 = 1; i2 < dr.length && i2 < 3; i2++) {   // 같은 진하기로 바로 아래 이어질 때만 수업명
+        if (dr[i2][0] - nameEnd < h0 * 1.35 && tone(dr[i2]) - t0 < 28) nameEnd = dr[i2][1]; else break;
       }
       const nameY = [dr[0][0], nameEnd];
       const subs = allRuns.filter(r2 => r2[0] > nameEnd + up);
