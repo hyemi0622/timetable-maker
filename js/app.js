@@ -30,7 +30,7 @@ const S = {
   tt: { x: .5, y: .34, w: .74 },              // 중심x, 상단y, 폭 (비율)
   startHour: 9, endHour: 18, dayCount: 5,
   ttFs: 1,
-  items: [], lineColor: '#3A3A3A', fontTable: 'BMKkubulim', fontBubble: 'Pretendard',
+  items: [], lineColor: '#3A3A3A', fontTable: 'OkDandan', fontBubble: 'Pretendard',
   sel: null, done: false
 };
 const $ = s => document.querySelector(s);
@@ -355,12 +355,12 @@ function hSeg(y, x0, x1, seed, amp) { const p = []; const n = Math.max(2, Math.c
 function geom() {
   const W = cv.width, H = cv.height;
   const tw = S.tt.w * W, days = S.dayCount, rows = Math.max(1, S.endHour - S.startHour);
-  const timeW = tw * .115, headH = tw * .075, colW = (tw - timeW) / days;
+  const timeW = tw * .115, headH = tw * .085, colW = (tw - timeW) / days;
   const rowH = tw * (rows > 10 ? 1.35 / rows : .145);
   const th = headH + rowH * rows;
   const x = S.tt.x * W - tw / 2, y = S.tt.y * H;
-  WAVE = tw * .10;
-  return { x, y, tw, th, timeW, headH, colW, rowH, rows, days, amp: tw * .0026 };
+  WAVE = tw * .115;
+  return { x, y, tw, th, timeW, headH, colW, rowH, rows, days, amp: tw * .0024 };
 }
 
 function wrap(text, maxW, max) {
@@ -377,7 +377,7 @@ const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) 
 function drawTable() {
   const g = geom(), f = S.fontTable;
   ctx.save();
-  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.3, g.tw * .0062);
+  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.4, g.tw * .0075);
   ctx.lineJoin = ctx.lineCap = 'round';
 
   // 표 안쪽 기본 흰색
@@ -401,8 +401,11 @@ function drawTable() {
     const cx0 = g.x + g.timeW + it.day * g.colW, cx1 = cx0 + g.colW;
     const y0 = g.y + g.headH + (it.s - S.startHour) * g.rowH, y1 = g.y + g.headH + (it.e - S.startHour) * g.rowH;
     if (y1 <= g.y + g.headH || y0 > g.y + g.th) return;
+    const gs = t => { const k = t - S.startHour; return Number.isInteger(k) ? k * 3 + 100 : null; };
+    const st = gs(it.s), sb = gs(it.e);
     ctx.beginPath();
-    poly([...hSeg(y0, cx0, cx1, i * 7 + 3, g.amp), ...vSeg(cx1, y0, y1, it.day + 40, g.amp), ...hSeg(y1, cx1, cx0, i * 7 + 9, g.amp), ...vSeg(cx0, y1, y0, it.day + 39, g.amp)]);
+    poly([...hSeg(y0, cx0, cx1, st === null ? i * 7 + 3 : st, g.amp), ...vSeg(cx1, y0, y1, it.day + 41, g.amp),
+          ...hSeg(y1, cx1, cx0, sb === null ? i * 7 + 9 : sb, g.amp), ...vSeg(cx0, y1, y0, it.day + 40, g.amp)]);
     ctx.closePath(); ctx.fillStyle = it.color; ctx.fill(); ctx.stroke();
 
     // 텍스트
@@ -559,7 +562,7 @@ PALETTE.forEach(c => {
   };
   $('#palette').appendChild(i);
 });
-[['#fontsTable', 'fontTable', 'BMKkubulim'], ['#fontsBubble', 'fontBubble', 'Pretendard']].forEach(([sel, key, def]) => {
+[['#fontsTable', 'fontTable', 'OkDandan'], ['#fontsBubble', 'fontBubble', 'Pretendard']].forEach(([sel, key, def]) => {
   FONTS.forEach(([id, label]) => {
     const b = document.createElement('button'); b.textContent = label; b.style.fontFamily = `"${id}", Pretendard`;
     if (id === def) b.classList.add('sel');
