@@ -14,7 +14,7 @@ const PALETTE = ['#CDDEE3','#8E9CBF','#E8EBDF','#97B4C7','#E5EAEF','#BBCDC0','#D
                  '#F6F3E7','#DAE4DB','#95A797','#BDCAD2','#B3C0BA','#E6E6E6','#A6B6C0','#B9B9B9','#FFFFFF',
                  '#D9CBB8','#C4B39A','#A89078','#8B7355','#6B5B4B','#5C4A3A','#3A2E24','#CFCFCF','#8A8A8A','#5B5B5B'];
 const FONTS = [['Pretendard','프리텐다드'],['BMKkubulim','배민 꾸불림체'],['OkDandan','Ok 단단체'],
-               ['YoonJihee','윤 지희'],['YoonSehee','윤 세희']];
+               ['NanumMiddle','나눔손글씨 중학생'],['NanumBaeEunHye','나눔손글씨 배은혜'],['NanumYammy','나눔손글씨 맛있는']];
 const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
 // 말풍선별 글자 영역 (이미지 크기 대비 비율)
 const BUBBLE_TXT = [[.5,.5,.60],[.5,.43,.68],[.5,.42,.60],[.5,.44,.80],[.5,.42,.60],[.5,.5,.72]];

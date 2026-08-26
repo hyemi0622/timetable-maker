@@ -38,11 +38,11 @@ fonts/          손글씨 폰트 파일을 넣는 곳
 | Pretendard | 포함 (CDN) |
 | 배달의민족 꾸불림체 | `fonts/BMKkubulim.woff2` 포함 |
 | Ok 단단체 | `fonts/OkDandan.woff2` 포함 |
-| Yoon 지희 | 직접 받아 `fonts/YoonJihee.ttf` 로 넣어 주세요 — https://font.co.kr/collection/sub?family_idx=10092 |
-| Yoon 세희 | 직접 받아 `fonts/YoonSehee.ttf` 로 넣어 주세요 — https://font.co.kr/collection/sub?family_idx=10088 |
+| 나눔손글씨 중학생 | `fonts/NanumMiddle.woff` 포함 |
+| 나눔손글씨 배은혜 | `fonts/NanumBaeEunHye.woff` 포함 |
+| 나눔손글씨 맛있는 | `fonts/NanumYammy.woff` 포함 |
 
-윤디자인 두 글꼴은 사이트에서 로그인 후 내려받는 방식이라 자동으로 받을 수 없었습니다.
-파일을 넣으면 버튼이 바로 동작하고, 없는 상태로 누르면 안내 문구가 뜹니다.
+나눔손글씨 3종은 네이버 클로바 나눔손글씨(https://clova.ai/handwriting) 무료 배포본입니다.
 
 ## 파싱에 대해
 - 라이트 모드 / **다크 모드 캡쳐본 모두** 지원합니다 (배경 밝기를 자동으로 판별).
