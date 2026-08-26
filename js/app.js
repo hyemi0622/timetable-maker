@@ -149,6 +149,37 @@ function parseTimetableImage(img) {
   } else { pitch = Math.min(...comps.map(m => m.h)); top = Math.min(...comps.map(m => m.y0)); }
   if (pitch < 6) pitch = Math.min(...comps.map(m => m.h));
 
+  // 4-b) 같은 색으로 붙어 있는 블록을 글자 덩어리 기준으로 분리
+  const parts = [];
+  comps.forEach(m => {
+    const prof = [];
+    for (let j = m.y0; j <= m.y1; j++) {
+      let n = 0;
+      for (let i = m.x0; i <= m.x1; i++) if (!mask[j * W + i]) n++;
+      prof.push(n);
+    }
+    const need = Math.max(2, (m.w * .06) | 0), gaps = [];
+    let st = -1;
+    for (let k = 0; k < prof.length; k++) {
+      if (prof[k] >= need) { if (st < 0) st = k; }
+      else if (st >= 0 && k - st > 0) { gaps.push([st, k - 1]); st = -1; }
+    }
+    if (st >= 0) gaps.push([st, prof.length - 1]);
+    const grp = [];
+    gaps.forEach(g2 => {
+      const last = grp[grp.length - 1];
+      if (last && g2[0] - last[1] < pitch * .32) last[1] = g2[1]; else grp.push([...g2]);
+    });
+    if (grp.length < 2) { parts.push(m); return; }
+    const lead = grp[0][0];
+    for (let k = 0; k < grp.length; k++) {
+      const y0 = m.y0 + (k ? grp[k][0] - lead : 0);
+      const y1 = k < grp.length - 1 ? m.y0 + grp[k + 1][0] - lead - 1 : m.y1;
+      if (y1 - y0 > pitch * .3) parts.push({ ...m, y0, y1, h: y1 - y0 + 1 });
+    }
+  });
+  comps.length = 0; comps.push(...parts);
+
   // 5) 과목 생성 (pitch = 1시간)
   const startHour = 9, q = v => Math.round(v * 2) / 2;   // 30분 단위 반올림
   const items = comps.map((m, i) => {
@@ -268,6 +299,8 @@ function cutout(img) {
       out[p] = 1; const i = p % W, j = (p / W) | 0;
       if (i > 0) push(p - 1); if (i < W - 1) push(p + 1); if (j > 0) push(p - W); if (j < H - 1) push(p + W);
     }
+    // 선으로 막혀 바깥 채우기가 닿지 못한 안쪽 빈 공간도 같은 배경색이면 제거
+    for (let p = 0; p < W * H; p++) if (!out[p] && near(p, br, bg, bb)) out[p] = 1;
     for (let p = 0; p < W * H; p++) if (out[p]) d[p * 4 + 3] = 0;
     // 가장자리 부드럽게
     for (let j = 1; j < H - 1; j++) for (let i = 1; i < W - 1; i++) {
@@ -364,12 +397,22 @@ function geom() {
 }
 
 function wrap(text, maxW, max) {
-  const out = []; let line = '';
-  for (const ch of text) {
-    if (ctx.measureText(line + ch).width > maxW && line) { out.push(line); line = ch; if (out.length === max - 1 && false) break; }
-    else line += ch;
+  const out = [];
+  let line = '';
+  const flush = () => { if (line) { out.push(line); line = ''; } };
+  for (let w of text.split(/\s+/).filter(Boolean)) {
+    const join = line ? line + ' ' + w : w;
+    if (ctx.measureText(join).width <= maxW) { line = join; continue; }
+    flush();
+    while (ctx.measureText(w).width > maxW && w.length > 1) {
+      let i = 1;
+      while (i < w.length && ctx.measureText(w.slice(0, i + 1)).width <= maxW) i++;
+      out.push(w.slice(0, i)); w = w.slice(i);
+      if (out.length >= max) return out.slice(0, max);
+    }
+    line = w;
   }
-  if (line) out.push(line);
+  flush();
   return out.slice(0, max);
 }
 const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) + .587 * ((n >> 8) & 255) + .114 * (n & 255)) / 255; };
@@ -419,7 +462,10 @@ function drawTable() {
     const lines = wrap(it.name, tw, 3);
     let ty = y0 + pad;
     lines.forEach(l => { ctx.fillText(l, cx0 + pad, ty); ty += fs * 1.22; });
-    if (it.room) { ctx.font = `400 ${fs * .86}px "${f}", Pretendard, sans-serif`; ctx.fillText(it.room, cx0 + pad, ty + fs * .35); }
+    if (it.room) {
+      ctx.font = `400 ${fs * .70}px "${f}", Pretendard, sans-serif`;
+      ctx.globalAlpha = .8; ctx.fillText(it.room, cx0 + pad, ty + fs * .08); ctx.globalAlpha = 1;
+    }
     ctx.restore();
   });
 
