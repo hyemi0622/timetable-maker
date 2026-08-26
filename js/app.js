@@ -142,7 +142,9 @@ function parseTimetableImage(img) {
     for (let i = 1; i < vl.length; i++) gaps2.push(vl[i] - vl[i - 1]);
     const sorted = [...gaps2].sort((a, b) => a - b), med = sorted[sorted.length >> 1];
     const k0 = gaps2.findIndex(g2 => Math.abs(g2 - med) < med * .25);
-    if (k0 >= 0) { colW = med; gridL = vl[k0]; }
+    // 요일 칸 수가 5~7개로 나올 때만 신뢰한다
+    const nDay = gaps2.filter(g2 => Math.abs(g2 - med) < med * .25).length;
+    if (k0 >= 0 && nDay >= 4 && nDay <= 7 && med > W * .08) { colW = med; gridL = vl[k0]; }
   }
 
   // 4) 가로 그리드 라인으로 시간 단위(pitch) 추정
