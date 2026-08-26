@@ -15,6 +15,7 @@ const PALETTE = ['#CDDEE3','#8E9CBF','#E8EBDF','#97B4C7','#E5EAEF','#BBCDC0','#D
                  '#D9CBB8','#C4B39A','#A89078','#8B7355','#6B5B4B','#5C4A3A','#3A2E24','#CFCFCF','#8A8A8A','#5B5B5B'];
 const FONTS = [['Pretendard','프리텐다드'],['BMKkubulim','배민 꾸불림체'],['OkDandan','Ok 단단체'],
                ['Fromsol','그리운 프롬솔'],['DungGeunMo','둥근모꼴+'],['UhBeeMysen','어비 마이센']];
+const LABEL_FONT = 'OkDandan';   // 요일·시간 라벨은 글꼴을 바꾸지 않는다
 const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
 // 말풍선별 글자 영역 (이미지 크기 대비 비율)
 const BUBBLE_TXT = [[.5,.5,.60],[.5,.43,.68],[.5,.42,.60],[.5,.44,.80],[.5,.42,.60],[.5,.5,.72]];
@@ -461,7 +462,7 @@ async function ensureAssets() {
 /* ================= 3. 캔버스 렌더링 ================= */
 const cv = $('#stage'), ctx = cv.getContext('2d');
 function fitStage() {                 // 미리보기는 화면 해상도로 직접 렌더 (축소 뭉개짐 방지)
-  const maxH = Math.min(window.innerHeight * .5, 520), maxW = Math.min(300, window.innerWidth - 56);
+  const maxW = Math.min(346, window.innerWidth - 56), maxH = window.innerHeight * 1.1;
   const ar = S.device[1] / S.device[2];
   let w = maxW, h = w / ar;
   if (h > maxH) { h = maxH; w = h * ar; }
@@ -612,10 +613,10 @@ function drawTable() {
   // 5) 요일 / 시간
   ctx.fillStyle = S.lineColor === '#FFFFFF' ? '#fff' : '#3c3c3c';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `600 ${g.tw * .050 * S.ttFs}px "${f}", Pretendard, sans-serif`;
+  ctx.font = `600 ${g.tw * .050 * S.ttFs}px "${LABEL_FONT}", Pretendard, sans-serif`;
   const hf = g.tw * .050 * S.ttFs;
   for (let j = 0; j < g.days; j++) inkText(DAYS[j], g.x + g.timeW + g.colW * (j + .5), g.y + g.headH * .55, hf);
-  ctx.font = `500 ${g.tw * .046 * S.ttFs}px "${f}", Pretendard, sans-serif`;
+  ctx.font = `500 ${g.tw * .046 * S.ttFs}px "${LABEL_FONT}", Pretendard, sans-serif`;
   for (let i = 0; i < g.rows; i++) {
     const h = S.startHour + i, lab = h > 12 ? h - 12 : h;
     inkText(String(lab), g.x + g.timeW * .55, g.y + g.headH + i * g.rowH + g.rowH * .22, g.tw * .046 * S.ttFs);

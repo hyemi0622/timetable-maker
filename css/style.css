@@ -5,11 +5,11 @@
 @font-face{font-family:'UhBeeMysen';src:url('../fonts/UhBeeMysen.woff') format('woff');font-display:swap}
 @font-face{font-family:'OkDandan';src:url('../fonts/OkDandan.woff2') format('woff2'),url('../fonts/OkDandan.ttf') format('truetype');font-display:swap}
 
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html{-webkit-text-size-adjust:none;-moz-text-size-adjust:none;text-size-adjust:none}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;color:#525252;
   background-image:url('../assets/bg/bg8.jpg');background-size:cover;background-attachment:fixed}
-.phone{position:relative;max-width:402px;margin:0 auto;min-height:100vh;background:rgba(255,255,255,.9);padding:0 28px 60px;overflow-x:hidden}
+.phone{position:relative;max-width:402px;margin:0 auto;min-height:100vh;background:rgba(255,255,255,.62);padding:0 28px 60px;overflow-x:hidden}
 .screen{display:none;padding-top:20px}
 .screen.active{display:block}
 
