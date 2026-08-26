@@ -383,12 +383,16 @@ async function ensureAssets() {
 
 /* ================= 3. 캔버스 렌더링 ================= */
 const cv = $('#stage'), ctx = cv.getContext('2d');
-function fitStage() {
-  cv.width = S.device[1]; cv.height = S.device[2];
+function fitStage() {                 // 미리보기는 화면 해상도로 직접 렌더 (축소 뭉개짐 방지)
   const maxH = Math.min(window.innerHeight * .46, 459), maxW = Math.min(211, window.innerWidth - 56);
-  const sc = Math.min(maxW / cv.width, maxH / cv.height);
-  cv.style.width = cv.width * sc + 'px'; cv.style.height = cv.height * sc + 'px';
+  const ar = S.device[1] / S.device[2];
+  let w = maxW, h = w / ar;
+  if (h > maxH) { h = maxH; w = h * ar; }
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
 }
+
 window.addEventListener('resize', () => { if ($('#s3').classList.contains('active')) { fitStage(); draw(); } });
 
 /* 손그림 흔들림 */
@@ -731,11 +735,15 @@ $('#doneBtn').onclick = () => {
   S.sel = S.done ? { t: 'table' } : null; draw();
 };
 $('#saveBtn').onclick = () => {
-  const keep = S.sel; S.sel = null; draw();
+  const keep = S.sel; S.sel = null;
+  const pw = cv.width, ph = cv.height, sw = cv.style.width, sh = cv.style.height;
+  cv.width = S.device[1]; cv.height = S.device[2];   // 저장은 기기 해상도 그대로
+  draw();
   cv.toBlob(b => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(b); a.download = '시간표배경화면.jpg'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    cv.width = pw; cv.height = ph; cv.style.width = sw; cv.style.height = sh;
     S.sel = keep; draw(); toast('저장했어요!');
   }, 'image/jpeg', .95);
 };
