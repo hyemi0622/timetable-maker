@@ -461,7 +461,7 @@ async function ensureAssets() {
 
 /* ================= 3. 캔버스 렌더링 ================= */
 const cv = $('#stage'), ctx = cv.getContext('2d');
-const syncTouch = () => { cv.style.touchAction = S.sel ? 'none' : 'pan-y'; };
+const syncTouch = () => { cv.style.touchAction = (S.sel && S.sel.t !== 'item') ? 'none' : 'pan-y'; };
 function fitStage() {                 // 미리보기는 화면 해상도로 직접 렌더 (축소 뭉개짐 방지)
   const box = cv.parentElement.clientWidth || (window.innerWidth - 56);
   const w = Math.min(360, box), ar = S.device[1] / S.device[2], h = w / ar;
