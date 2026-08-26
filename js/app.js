@@ -451,28 +451,34 @@ function drawTable() {
         ...hSeg(g.y + g.th, g.x + g.tw, g.x, g.rows * 3 + 100, g.amp), ...vSeg(g.x, g.y + g.th, g.y, 39, g.amp)]);
   ctx.closePath(); ctx.fillStyle = '#FFFFFF'; ctx.fill();
 
-  // 2) 과목 박스는 '채우기'만 (테두리를 따로 그리지 않아야 굵기가 일정)
-  const boxes = [];
+  // 2) 격자 — 모든 선을 한 번씩만 그린다 (굵기 균일)
+  ctx.beginPath();
+  for (let j = 0; j <= g.days; j++) poly(vSeg(g.x + g.timeW + j * g.colW, g.y, g.y + g.th, j + 40, g.amp));
+  poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
+  for (let i = 0; i <= g.rows; i++) poly(hSeg(g.y + g.headH + i * g.rowH, g.x, g.x + g.tw, i * 3 + 100, g.amp));
+  poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
+  ctx.stroke();
+
+  // 3) 과목 박스 채우기 — 선 두께만큼 안쪽으로 채워 격자선을 덮지 않게
+  const boxes = [], ins = ctx.lineWidth / 2;
   S.items.forEach((it, i) => {
     if (it.day >= g.days) return;
     const cx0 = g.x + g.timeW + it.day * g.colW, cx1 = cx0 + g.colW;
     const y0 = g.y + g.headH + (it.s - S.startHour) * g.rowH, y1 = g.y + g.headH + (it.e - S.startHour) * g.rowH;
     if (y1 <= g.y + g.headH || y0 > g.y + g.th) return;
     const st = gs(it.s), sb = gs(it.e);
-    const path = [...hSeg(y0, cx0, cx1, st === null ? i * 7 + 3 : st, g.amp), ...vSeg(cx1, y0, y1, it.day + 41, g.amp),
-                  ...hSeg(y1, cx1, cx0, sb === null ? i * 7 + 9 : sb, g.amp), ...vSeg(cx0, y1, y0, it.day + 40, g.amp)];
+    const path = [...hSeg(y0 + ins, cx0 + ins, cx1 - ins, st === null ? i * 7 + 3 : st, g.amp),
+                  ...vSeg(cx1 - ins, y0 + ins, y1 - ins, it.day + 41, g.amp),
+                  ...hSeg(y1 - ins, cx1 - ins, cx0 + ins, sb === null ? i * 7 + 9 : sb, g.amp),
+                  ...vSeg(cx0 + ins, y1 - ins, y0 + ins, it.day + 40, g.amp)];
     ctx.beginPath(); poly(path); ctx.closePath();
     ctx.fillStyle = it.color; ctx.fill();
     boxes.push({ it, i, cx0, cx1, y0, y1, st, sb, path });
   });
 
-  // 3) 격자 — 모든 선을 한 번씩만 그린다
+  // 3-b) 30분처럼 격자에 없는 과목 경계만 보강
   ctx.beginPath();
-  for (let j = 0; j <= g.days; j++) poly(vSeg(g.x + g.timeW + j * g.colW, g.y, g.y + g.th, j + 40, g.amp));
-  poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
-  for (let i = 0; i <= g.rows; i++) poly(hSeg(g.y + g.headH + i * g.rowH, g.x, g.x + g.tw, i * 3 + 100, g.amp));
-  poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
-  boxes.forEach(b => {   // 30분처럼 격자에 없는 경계만 보강
+  boxes.forEach(b => {
     if (b.st === null) poly(hSeg(b.y0, b.cx0, b.cx1, b.i * 7 + 3, g.amp));
     if (b.sb === null) poly(hSeg(b.y1, b.cx0, b.cx1, b.i * 7 + 9, g.amp));
   });
@@ -508,6 +514,23 @@ function drawTable() {
   ctx.restore();
 }
 
+let _bl = null, _blIdx = -2;
+function bubbleLine() {          // 말풍선에서 '선'만 남긴 레이어 (캐시)
+  if (_blIdx === S.bubbleIdx && _bl) return _bl;
+  const im = S.bubbleImg, c = document.createElement('canvas');
+  c.width = im.width; c.height = im.height;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(im, 0, 0);
+  const dt = x.getImageData(0, 0, c.width, c.height), d = dt.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = (d[i] + d[i + 1] + d[i + 2]) / 3;
+    if (d[i + 3] < 120 || v > 130) d[i + 3] = 0;
+  }
+  x.putImageData(dt, 0, 0);
+  _bl = c; _blIdx = S.bubbleIdx;
+  return c;
+}
+
 function bubbleRect() {
   const W = cv.width, H = cv.height, im = S.bubbleImg;
   const w = S.bubble.w * W, h = im ? w * im.height / im.width : 0;
@@ -528,6 +551,14 @@ function draw() {
   S.stickers.forEach(s => { const r = stickerRect(s); ctx.drawImage(s.img, r.x, r.y, r.w, r.h); });
   if (S.bubbleImg) {
     const r = bubbleRect(); ctx.drawImage(S.bubbleImg, r.x, r.y, r.w, r.h);
+    if (S.bbLw > 1.02) {                       // 선만 뽑아 여러 방향으로 겹쳐 굵게
+      const L = bubbleLine();
+      const rad = (S.bbLw - 1) * r.w * .008;
+      for (let a = 0; a < 8; a++) {
+        const t2 = a * Math.PI / 4;
+        ctx.drawImage(L, r.x + Math.cos(t2) * rad, r.y + Math.sin(t2) * rad, r.w, r.h);
+      }
+    }
     if (S.bubbleText) {
       const [cxr, cyr, wr] = BUBBLE_TXT[S.bubbleIdx] || [.5, .5, .7];
       const T = S.bubbleTxt;
@@ -661,6 +692,7 @@ ieR.oninput = () => { if (S.sel && S.sel.t === 'item') { S.items[S.sel.i].room =
 
 $('#ttFs').oninput = e => { S.ttFs = +e.target.value; draw(); };
 $('#ttLw').oninput = e => { S.ttLw = +e.target.value; draw(); };
+$('#bbLw').oninput = e => { S.bbLw = +e.target.value; draw(); };
 
 /* ---------- 완료 / 저장 ---------- */
 $('#doneBtn').onclick = () => {
