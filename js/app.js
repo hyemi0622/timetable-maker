@@ -440,6 +440,8 @@ const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) 
 function drawTable() {
   const g = geom(), f = S.fontTable;
   const gs = t => { const k = t - S.startHour; return Number.isInteger(k) ? k * 3 + 100 : null; };
+  // 격자에 없는 경계는 '요일 + 시각'으로 seed를 정해 인접 과목끼리 똑같은 선을 쓰게 한다
+  const es = (day, t) => day * 97 + Math.round((t - S.startHour) * 2) * 7 + 700;
   ctx.save();
   ctx.strokeStyle = S.lineColor;
   ctx.lineWidth = Math.max(1, g.tw * .0075 * S.ttLw);
@@ -467,9 +469,9 @@ function drawTable() {
     const y0 = g.y + g.headH + (it.s - S.startHour) * g.rowH, y1 = g.y + g.headH + (it.e - S.startHour) * g.rowH;
     if (y1 <= g.y + g.headH || y0 > g.y + g.th) return;
     const st = gs(it.s), sb = gs(it.e);
-    const path = [...hSeg(y0 + ins, cx0 + ins, cx1 - ins, st === null ? i * 7 + 3 : st, g.amp),
+    const path = [...hSeg(y0 + ins, cx0 + ins, cx1 - ins, st === null ? es(it.day, it.s) : st, g.amp),
                   ...vSeg(cx1 - ins, y0 + ins, y1 - ins, it.day + 41, g.amp),
-                  ...hSeg(y1 - ins, cx1 - ins, cx0 + ins, sb === null ? i * 7 + 9 : sb, g.amp),
+                  ...hSeg(y1 - ins, cx1 - ins, cx0 + ins, sb === null ? es(it.day, it.e) : sb, g.amp),
                   ...vSeg(cx0 + ins, y1 - ins, y0 + ins, it.day + 40, g.amp)];
     ctx.beginPath(); poly(path); ctx.closePath();
     ctx.fillStyle = it.color; ctx.fill();
@@ -478,9 +480,16 @@ function drawTable() {
 
   // 3-b) 30분처럼 격자에 없는 과목 경계만 보강
   ctx.beginPath();
+  const drawn = new Set();
+  const edge = (day, t, y, cx0, cx1) => {
+    const key = day + ':' + t;
+    if (drawn.has(key)) return;          // 맞닿은 과목의 경계선을 두 번 그리지 않는다
+    drawn.add(key);
+    poly(hSeg(y, cx0, cx1, es(day, t), g.amp));
+  };
   boxes.forEach(b => {
-    if (b.st === null) poly(hSeg(b.y0, b.cx0, b.cx1, b.i * 7 + 3, g.amp));
-    if (b.sb === null) poly(hSeg(b.y1, b.cx0, b.cx1, b.i * 7 + 9, g.amp));
+    if (b.st === null) edge(b.it.day, b.it.s, b.y0, b.cx0, b.cx1);
+    if (b.sb === null) edge(b.it.day, b.it.e, b.y1, b.cx0, b.cx1);
   });
   ctx.stroke();
 
