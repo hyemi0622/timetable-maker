@@ -461,18 +461,21 @@ async function ensureAssets() {
 
 /* ================= 3. 캔버스 렌더링 ================= */
 const cv = $('#stage'), ctx = cv.getContext('2d');
+const syncTouch = () => { cv.style.touchAction = S.sel ? 'none' : 'pan-y'; };
 function fitStage() {                 // 미리보기는 화면 해상도로 직접 렌더 (축소 뭉개짐 방지)
   const box = cv.parentElement.clientWidth || (window.innerWidth - 56);
-  const maxW = Math.min(360, box), maxH = window.innerHeight * 1.1;
-  const ar = S.device[1] / S.device[2];
-  let w = maxW, h = w / ar;
-  if (h > maxH) { h = maxH; w = h * ar; }
+  const w = Math.min(360, box), ar = S.device[1] / S.device[2], h = w / ar;
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
   cv.style.width = w + 'px'; cv.style.height = h + 'px';
 }
 
-window.addEventListener('resize', () => { if ($('#s3').classList.contains('active')) { fitStage(); draw(); } });
+let _lastW = 0;
+window.addEventListener('resize', () => {     // 폭이 실제로 바뀔 때만 다시 그린다
+  const w = cv.parentElement.clientWidth;
+  if (w === _lastW || !$('#s3').classList.contains('active')) return;
+  _lastW = w; fitStage(); draw();
+});
 
 /* 손그림 흔들림 */
 let WAVE = 26;
@@ -744,6 +747,7 @@ cv.addEventListener('pointerdown', e => {
     if (!hit && inR(p, tableRect())) hit = { t: 'table' };
   }
   S.sel = hit;
+  syncTouch();
   if (typeof syncItemEdit === 'function') syncItemEdit();
   if (hit && hit.t === 'btext') {
     const br = bubbleRect();
@@ -826,7 +830,7 @@ $('#doneBtn').onclick = () => {
   S.done = !S.done;
   $('#doneBtn').classList.toggle('on', S.done);
   $('#doneHint').textContent = S.done ? '시간표를 드래그해 옮기고, 오른쪽 아래 점으로 크기를 조절하세요.' : '완료 버튼을 누른 후 시간표 사이즈를 조절해 보세요.';
-  S.sel = S.done ? { t: 'table' } : null; draw();
+  S.sel = S.done ? { t: 'table' } : null; syncTouch(); draw();
 };
 $('#saveBtn').onclick = () => {
   const keep = S.sel; S.sel = null;
