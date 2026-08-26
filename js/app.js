@@ -29,7 +29,7 @@ const S = {
   stickers: [],                               // {img,x,y,w}
   tt: { x: .5, y: .34, w: .74 },              // 중심x, 상단y, 폭 (비율)
   startHour: 9, endHour: 18, dayCount: 5,
-  ttFs: 1,
+  ttFs: 1, ttLw: 1,
   items: [], lineColor: '#3A3A3A', fontTable: 'OkDandan', fontBubble: 'Pretendard',
   sel: null, done: false
 };
@@ -213,9 +213,12 @@ async function runOCR() {
       cx.filter = 'grayscale(1) contrast(1.6)';
       cx.drawImage(img, b.x0 * k, b.y0 * k, b.w * k, b.h * k, 0, 0, cv.width, cv.height);
       const { data } = await worker.recognize(cv);
-      const lines = data.text.split('\n').map(t => t.trim()).filter(Boolean);
-      if (lines[0]) it.name = lines[0];
-      if (lines[1]) it.room = lines[1];
+      const ls = (data.lines || []).map(l => ({ t: (l.text || '').trim(), h: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0 })).filter(l => l.t);
+      if (!ls.length) continue;
+      const hMax = Math.max(...ls.map(l => l.h));
+      const big = ls.filter(l => l.h >= hMax * .85), small = ls.filter(l => l.h < hMax * .85);
+      it.name = big.map(l => l.t).join(' ');
+      it.room = small.map(l => l.t).join(' ');
     }
     await worker.terminate();
     toast('과목명 인식 완료'); renderParseInfo(); if ($('#editModal').classList.contains('open')) renderRows();
@@ -299,8 +302,19 @@ function cutout(img) {
       out[p] = 1; const i = p % W, j = (p / W) | 0;
       if (i > 0) push(p - 1); if (i < W - 1) push(p + 1); if (j > 0) push(p - W); if (j < H - 1) push(p + W);
     }
-    // 선으로 막혀 바깥 채우기가 닿지 못한 안쪽 빈 공간도 같은 배경색이면 제거
-    for (let p = 0; p < W * H; p++) if (!out[p] && near(p, br, bg, bb)) out[p] = 1;
+    // 선으로 막힌 안쪽 빈 공간: 작은 구멍만 제거(넓은 면적은 캐릭터의 일부로 보고 남김)
+    const holeMax = W * H * .06, hs = new Uint8Array(W * H);
+    for (let p0 = 0; p0 < W * H; p0++) {
+      if (out[p0] || hs[p0] || !near(p0, br, bg, bb)) continue;
+      const stack = [p0], cell = []; hs[p0] = 1;
+      while (stack.length) {
+        const q = stack.pop(); cell.push(q);
+        const i = q % W, j = (q / W) | 0;
+        for (const np of [i > 0 ? q - 1 : -1, i < W - 1 ? q + 1 : -1, j > 0 ? q - W : -1, j < H - 1 ? q + W : -1])
+          if (np >= 0 && !hs[np] && !out[np] && near(np, br, bg, bb)) { hs[np] = 1; stack.push(np); }
+      }
+      if (cell.length < holeMax) for (const q of cell) out[q] = 1;
+    }
     for (let p = 0; p < W * H; p++) if (out[p]) d[p * 4 + 3] = 0;
     // 가장자리 부드럽게
     for (let j = 1; j < H - 1; j++) for (let i = 1; i < W - 1; i++) {
@@ -420,7 +434,7 @@ const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) 
 function drawTable() {
   const g = geom(), f = S.fontTable;
   ctx.save();
-  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.4, g.tw * .0075);
+  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1, g.tw * .0075 * S.ttLw);
   ctx.lineJoin = ctx.lineCap = 'round';
 
   // 표 안쪽 기본 흰색
@@ -433,7 +447,6 @@ function drawTable() {
   ctx.beginPath();
   for (let j = 0; j <= g.days; j++) { const x = g.x + g.timeW + j * g.colW; poly(vSeg(x, g.y, g.y + g.th, j + 40, g.amp)); }
   poly(vSeg(g.x, g.y, g.y + g.th, 39, g.amp));
-  poly(vSeg(g.x + g.tw, g.y, g.y + g.th, 60, g.amp));
   for (let i = 0; i <= g.rows; i++) { const y = g.y + g.headH + i * g.rowH; poly(hSeg(y, g.x, g.x + g.tw, i * 3 + 100, g.amp)); }
   poly(hSeg(g.y, g.x, g.x + g.tw, 99, g.amp));
   ctx.stroke();
@@ -624,6 +637,7 @@ PALETTE.forEach(c => {
 });
 
 $('#ttFs').oninput = e => { S.ttFs = +e.target.value; draw(); };
+$('#ttLw').oninput = e => { S.ttLw = +e.target.value; draw(); };
 
 /* ---------- 완료 / 저장 ---------- */
 $('#doneBtn').onclick = () => {
