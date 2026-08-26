@@ -113,3 +113,9 @@ body{margin:0;font-size:16px;background:#f4f4f5;font-family:'Pretendard',-apple-
 .bg-solid input::-webkit-color-swatch{border:0;border-radius:50%}
 .bg-solid b{font-size:11px;color:#606060;background:#EBEBEB;border-radius:999px;padding:4px 10px;font-weight:500}
 .bg-solid.sel{border-color:#5B5B5B}
+
+.ie-row{display:flex;align-items:center;gap:6px}
+.ie-row select,.ie-row input{height:34px;border:1px solid #D7D7D7;border-radius:5px;background:#FBFBFB;padding:0 8px;font-size:12px;font-family:inherit;color:#525252}
+.ie-row select{flex:0 0 74px}
+.ie-row input{flex:1;min-width:0}
+.ie-row span{font-size:12px;color:#999}

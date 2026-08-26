@@ -235,8 +235,13 @@ function parseTimetableImage(img) {
     // 30분 격자에 가까우면 30분으로, 확실히 벗어날 때만 15분 단위로 스냅
   const startHour = 9, q = v => {
     const half = Math.round(v * 2) / 2;
-    return Math.abs(v - half) < .14 ? half : Math.round(v * 4) / 4;
+    return Math.abs(v - half) < .2 ? half : Math.round(v * 4) / 4;
   };
+  // 블록이 셀 안쪽 여백에서 시작해 전체가 조금씩 밀리는 것을 보정
+  const offs = comps.map(m => { const u = (m.y0 - top) / pitch; return u - Math.floor(u); }).sort((a, b) => a - b);
+  const medOff = offs[offs.length >> 1];
+  if (medOff > .02 && medOff < .3) top += medOff * pitch;
+
   const items = comps.map((m, i) => {
     const day = Math.max(0, Math.round((( m.x0 + m.x1) / 2 - gridL - colW / 2) / colW));
     const s = startHour + q((m.y0 - top) / pitch);
@@ -847,11 +852,21 @@ $('#palette').appendChild(pickWrap);
 });
 
 const ieBox = $('#itemEdit'), ieN = $('#ieName'), ieR = $('#ieRoom');
+const ieD = $('#ieDay'), ieS = $('#ieS'), ieE = $('#ieE');
+const toHM = v => `${String(Math.floor(v)).padStart(2, '0')}:${String(Math.round((v % 1) * 60)).padStart(2, '0')}`;
+const toNum = t => { const [h, m] = (t || '').split(':').map(Number); return isNaN(h) ? null : h + (m || 0) / 60; };
 function syncItemEdit() {
   const on = S.sel && S.sel.t === 'item';
   ieBox.hidden = !on;
-  if (on) { const it = S.items[S.sel.i]; ieN.value = it.name || ''; ieR.value = it.room || ''; }
+  if (!on) return;
+  const it = S.items[S.sel.i];
+  ieN.value = it.name || ''; ieR.value = it.room || '';
+  ieD.innerHTML = DAYS.slice(0, S.dayCount).map((d, k) => `<option value="${k}"${k === it.day ? ' selected' : ''}>${d}</option>`).join('');
+  ieS.value = toHM(it.s); ieE.value = toHM(it.e);
 }
+ieD.onchange = () => { if (S.sel && S.sel.t === 'item') { S.items[S.sel.i].day = +ieD.value; draw(); } };
+ieS.onchange = () => { const v = toNum(ieS.value); if (v !== null && S.sel && S.sel.t === 'item') { S.items[S.sel.i].s = v; draw(); } };
+ieE.onchange = () => { const v = toNum(ieE.value); if (v !== null && S.sel && S.sel.t === 'item') { S.items[S.sel.i].e = v; draw(); } };
 ieN.oninput = () => { if (S.sel && S.sel.t === 'item') { S.items[S.sel.i].name = ieN.value; draw(); } };
 ieR.oninput = () => { if (S.sel && S.sel.t === 'item') { S.items[S.sel.i].room = ieR.value; draw(); } };
 
