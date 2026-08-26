@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
 <title>시간표 커스텀 메이커</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -105,6 +105,29 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<script>
+(function () {                       // 인앱 브라우저(카톡 '가가' 등)가 글자만 키우면 그만큼 되돌린다
+  try {
+    var p = document.createElement('span');
+    p.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:100px;line-height:1;';
+    p.textContent = '가';
+    document.body.appendChild(p);
+    var r = Math.max(parseFloat(getComputedStyle(p).fontSize) / 100,
+                     p.getBoundingClientRect().height / 100);
+    p.remove();
+    if (!(r > 1.02)) return;
+    var k = 1 / r;
+    [].forEach.call(document.styleSheets, function (ss) {
+      try {
+        [].forEach.call(ss.cssRules, function (rule) {
+          var fs = rule.style && rule.style.fontSize;
+          if (fs && fs.slice(-2) === 'px') rule.style.fontSize = (parseFloat(fs) * k).toFixed(2) + 'px';
+        });
+      } catch (e) { }
+    });
+  } catch (e) { }
+})();
+</script>
 <script src="js/app.js"></script>
 </body>
 </html>

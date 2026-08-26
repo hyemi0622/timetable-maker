@@ -5,15 +5,15 @@
 @font-face{font-family:'UhBeeMysen';src:url('../fonts/UhBeeMysen.woff') format('woff');font-display:swap}
 @font-face{font-family:'OkDandan';src:url('../fonts/OkDandan.woff2') format('woff2'),url('../fonts/OkDandan.ttf') format('truetype');font-display:swap}
 
-html{-webkit-text-size-adjust:none;-moz-text-size-adjust:none;text-size-adjust:none}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{-webkit-text-size-adjust:100%;-moz-text-size-adjust:100%;text-size-adjust:100%}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;color:#525252;
   background-image:url('../assets/bg/bg8.jpg');background-size:cover;background-attachment:fixed}
 .phone{position:relative;max-width:402px;margin:0 auto;min-height:100vh;background:rgba(255,255,255,.62);padding:0 28px 60px;overflow-x:hidden}
 .screen{display:none;padding-top:20px}
 .screen.active{display:block}
 
-.title{font-size:18px;line-height:26px;font-weight:600;text-align:center;letter-spacing:.01em;color:#525252;margin:40px 0 0}
+.title{font-size:17px;line-height:25px;word-break:keep-all;font-weight:600;text-align:center;letter-spacing:.01em;color:#525252;margin:40px 0 0}
 .blue{color:#7d9fd1;font-weight:500}.pink{color:#e3a7b5;font-weight:500}
 .pill{display:inline-block;background:#EBEBEB;border-radius:999px;padding:4px 14px;font-size:10px;font-weight:500;color:#606060;letter-spacing:.01em}
 .center{display:block;margin-left:auto;margin-right:auto;text-align:center;width:fit-content}
