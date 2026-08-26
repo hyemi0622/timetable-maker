@@ -14,7 +14,7 @@ const PALETTE = ['#CDDEE3','#8E9CBF','#E8EBDF','#97B4C7','#E5EAEF','#BBCDC0','#D
                  '#F6F3E7','#DAE4DB','#95A797','#BDCAD2','#B3C0BA','#E6E6E6','#A6B6C0','#B9B9B9','#FFFFFF',
                  '#D9CBB8','#C4B39A','#A89078','#8B7355','#6B5B4B','#5C4A3A','#3A2E24','#CFCFCF','#8A8A8A','#5B5B5B'];
 const FONTS = [['Pretendard','프리텐다드'],['BMKkubulim','배민 꾸불림체'],['OkDandan','Ok 단단체'],
-               ['NanumMiddle','나눔손글씨 중학생'],['NanumBaeEunHye','나눔손글씨 배은혜'],['NanumYammy','나눔손글씨 맛있는']];
+               ['Fromsol','그리운 프롬솔'],['DungGeunMo','둥근모꼴+'],['UhBeeMysen','어비 마이센']];
 const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
 // 말풍선별 글자 영역 (이미지 크기 대비 비율)
 const BUBBLE_TXT = [[.5,.5,.60],[.5,.43,.68],[.5,.42,.60],[.5,.44,.80],[.5,.42,.60],[.5,.5,.72]];
@@ -28,7 +28,7 @@ const S = {
   stickers: [],                               // {img,x,y,w}
   tt: { x: .5, y: .34, w: .74 },              // 중심x, 상단y, 폭 (비율)
   startHour: 9, endHour: 18, dayCount: 5,
-  ttFs: 1, ttLw: 1,
+  ttFs: 1, ttLw: 1, txFw: 1,
   items: [], lineColor: '#3A3A3A', fontTable: 'OkDandan', fontBubble: 'Pretendard',
   sel: null, done: false
 };
@@ -514,6 +514,16 @@ function wrap(text, maxW, max) {
   flush();
   return out.slice(0, max);
 }
+function inkText(t, x, y, fs) {          // 글씨 굵기 조절 (같은 색 외곽선을 덧그린다)
+  ctx.fillText(t, x, y);
+  if (S.txFw > 1.02) {
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle; ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.lineWidth = fs * (S.txFw - 1) * .11;
+    ctx.strokeText(t, x, y);
+    ctx.restore();
+  }
+}
 const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) + .587 * ((n >> 8) & 255) + .114 * (n & 255)) / 255; };
 
 function drawTable() {
@@ -587,13 +597,13 @@ function drawTable() {
     const fs = g.tw * .038 * S.ttFs;
     ctx.font = `600 ${fs}px "${f}", Pretendard, sans-serif`;
     let ty = b.y0 + pad;
-    wrap(it.name, tw, 3).forEach(l => { ctx.fillText(l, b.cx0 + pad, ty); ty += fs * 1.22; });
+    wrap(it.name, tw, 3).forEach(l => { inkText(l, b.cx0 + pad, ty, fs); ty += fs * 1.22; });
     if (it.room) {
       const sf = fs * .70;
       ctx.font = `400 ${sf}px "${f}", Pretendard, sans-serif`;
       ctx.globalAlpha = .8;
       let sy = ty + fs * .08;
-      wrap(it.room, tw, 4).forEach(l => { ctx.fillText(l, b.cx0 + pad, sy); sy += sf * 1.2; });
+      wrap(it.room, tw, 4).forEach(l => { inkText(l, b.cx0 + pad, sy, sf); sy += sf * 1.2; });
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -603,11 +613,12 @@ function drawTable() {
   ctx.fillStyle = S.lineColor === '#FFFFFF' ? '#fff' : '#3c3c3c';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = `600 ${g.tw * .050 * S.ttFs}px "${f}", Pretendard, sans-serif`;
-  for (let j = 0; j < g.days; j++) ctx.fillText(DAYS[j], g.x + g.timeW + g.colW * (j + .5), g.y + g.headH * .55);
+  const hf = g.tw * .050 * S.ttFs;
+  for (let j = 0; j < g.days; j++) inkText(DAYS[j], g.x + g.timeW + g.colW * (j + .5), g.y + g.headH * .55, hf);
   ctx.font = `500 ${g.tw * .046 * S.ttFs}px "${f}", Pretendard, sans-serif`;
   for (let i = 0; i < g.rows; i++) {
     const h = S.startHour + i, lab = h > 12 ? h - 12 : h;
-    ctx.fillText(String(lab), g.x + g.timeW * .55, g.y + g.headH + i * g.rowH + g.rowH * .22);
+    inkText(String(lab), g.x + g.timeW * .55, g.y + g.headH + i * g.rowH + g.rowH * .22, g.tw * .046 * S.ttFs);
   }
   ctx.restore();
 }
@@ -677,7 +688,7 @@ function draw() {
       lines = wrap(S.bubbleText, r.w * wr * Math.max(1, T.k), 3);
       const cx = r.x + r.w * cxr + T.dx * r.w, cy = r.y + r.h * cyr + T.dy * r.h;
       let mw = 0; lines.forEach(l => mw = Math.max(mw, ctx.measureText(l).width));
-      lines.forEach((l, i) => ctx.fillText(l, cx, cy + (i - (lines.length - 1) / 2) * fs * 1.25));
+      lines.forEach((l, i) => inkText(l, cx, cy + (i - (lines.length - 1) / 2) * fs * 1.25, fs));
       S._txt = { x: cx - mw / 2, y: cy - lines.length * fs * .68, w: mw, h: lines.length * fs * 1.32 };
     } else S._txt = null;
   }
@@ -805,6 +816,7 @@ ieR.oninput = () => { if (S.sel && S.sel.t === 'item') { S.items[S.sel.i].room =
 
 $('#ttFs').oninput = e => { S.ttFs = +e.target.value; draw(); };
 $('#ttLw').oninput = e => { S.ttLw = +e.target.value; draw(); };
+$('#txFw').oninput = e => { S.txFw = +e.target.value; draw(); };
 $('#bbLw').oninput = e => { S.bbLw = +e.target.value; draw(); };
 
 /* ---------- 완료 / 저장 ---------- */
