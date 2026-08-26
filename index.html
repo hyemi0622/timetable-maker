@@ -4,9 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>시간표 커스텀 메이커</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&family=Dongle:wght@400;700&family=Single+Day&family=Hi+Melody&family=Gamja+Flower&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -60,12 +57,12 @@
     <div class="stage-wrap"><canvas id="stage"></canvas></div>
 
     <div class="pill" style="margin-top:18px">색상 선택</div>
-    <p class="hint">과목을 탭하면 해당 박스 색상을 바꿀 수 있습니다.<br>(빈 곳을 탭하면 시간표 선 색상을 바꿀 수 있습니다.)</p>
+    <p class="hint">과목을 탭하면 해당 박스 색상을, 빈 곳을 탭하면 시간표 선 색상을 바꿀 수 있습니다.<br>말풍선 글씨는 잡아서 옮기거나 크기를 조절할 수 있어요.</p>
     <div class="panel"><div class="palette" id="palette"></div></div>
 
     <div class="pill" style="margin-top:18px">글꼴 선택</div>
-    <p class="hint">말풍선 내용과 과목 글꼴을 바꿔 보세요.</p>
-    <div class="panel"><div class="fonts" id="fonts"></div></div>
+    <p class="hint">시간표와 말풍선 글꼴을 따로 고를 수 있어요.</p>
+    <div class="panel"><div class="font-sec">시간표 글꼴</div><div class="fonts" id="fontsTable"></div><div class="font-sec">말풍선 글꼴</div><div class="fonts" id="fontsBubble"></div></div>
 
     <div class="center"><button class="round-dark" id="doneBtn">완료</button></div>
     <p class="hint center" id="doneHint">완료 버튼을 누른 후 시간표 사이즈를 조절해 보세요.</p>

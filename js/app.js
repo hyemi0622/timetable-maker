@@ -5,15 +5,17 @@
 const DEVICES = [
   ['iPhone 16 / 15 Pro', 1179, 2556], ['iPhone 16 / 15 Pro Max', 1290, 2796],
   ['iPhone 14 / 13 (Pro)', 1170, 2532], ['iPhone 11 / XR', 828, 1792],
-  ['iPhone SE', 750, 1334], ['갤럭시 S24 / S23', 1080, 2340],
+  ['iPhone 8 / SE2·SE3', 750, 1334], ['iPhone 8 Plus', 1080, 1920],
+  ['iPhone SE (1세대)', 640, 1136], ['갤럭시 S24 / S23', 1080, 2340],
   ['갤럭시 S24 Ultra', 1440, 3120], ['갤럭시 Z 플립', 1080, 2640],
-  ['아이패드 (4:3)', 1620, 2160]
+  ['갤럭시 A / 보급형', 720, 1560], ['아이패드 (4:3)', 1620, 2160]
 ];
 const PALETTE = ['#CDDEE3','#8E9CBF','#E8EBDF','#97B4C7','#E5EAEF','#BBCDC0','#D4B2B2','#CA9E9E','#B4A0A0','#E0D9D9',
-                 '#F6F3E7','#DAE4DB','#95A797','#BDCAD2','#B3C0BA','#E6E6E6','#A6B6C0','#B9B9B9','#3A3A3A','#FFFFFF'];
-const FONTS = [['Pretendard','프리텐다드(기본)'],['BMKkubulim','배민 꾸불림체'],['YoonJihee','윤 지희'],['YoonSehee','윤 세희'],
-               ['OkDandan','Ok 단단체'],['Gaegu','개구쟁이'],['Nanum Pen Script','나눔손글씨 펜'],['Gamja Flower','감자꽃'],
-               ['Hi Melody','하이멜로디'],['Single Day','싱글데이']];
+                 '#F6F3E7','#DAE4DB','#95A797','#BDCAD2','#B3C0BA','#E6E6E6','#A6B6C0','#B9B9B9','#FFFFFF',
+                 '#D9CBB8','#C4B39A','#A89078','#8B7355','#6B5B4B','#5C4A3A','#3A2E24','#CFCFCF','#8A8A8A','#5B5B5B',
+                 '#3A3A3A'];
+const FONTS = [['Pretendard','프리텐다드'],['BMKkubulim','배민 꾸불림체'],['OkDandan','Ok 단단체'],
+               ['YoonJihee','윤 지희'],['YoonSehee','윤 세희']];
 const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
 // 말풍선별 글자 영역 (이미지 크기 대비 비율)
 const BUBBLE_TXT = [[.5,.5,.60],[.5,.43,.68],[.5,.42,.60],[.5,.44,.80],[.5,.42,.60],[.5,.5,.72]];
@@ -22,12 +24,12 @@ const BUBBLE_TXT = [[.5,.5,.60],[.5,.43,.68],[.5,.42,.60],[.5,.44,.80],[.5,.42,.
 const S = {
   device: DEVICES[0],
   bgSrc: 'assets/bg/bg1.jpg', bgImg: null, customBg: null,
-  bubbleIdx: -1, bubbleImg: null, bubbleText: '',
+  bubbleIdx: -1, bubbleImg: null, bubbleText: '', bubbleTxt: { dx: 0, dy: 0, k: 1 },
   bubble: { x: .52, y: .18, w: .40 },        // 캔버스 비율 좌표
   stickers: [],                               // {img,x,y,w}
   tt: { x: .5, y: .34, w: .74 },              // 중심x, 상단y, 폭 (비율)
   startHour: 9, endHour: 18, dayCount: 5,
-  items: [], lineColor: '#3A3A3A', font: 'Pretendard',
+  items: [], lineColor: '#3A3A3A', fontTable: 'BMKkubulim', fontBubble: 'Pretendard',
   sel: null, done: false
 };
 const $ = s => document.querySelector(s);
@@ -93,7 +95,10 @@ function parseTimetableImage(img) {
       for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const ni = qi + di, nj = qj + dj;
         if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
-        const np = nj * W + ni; if (mask[np] && !seen[np]) { seen[np] = 1; qs.push(np); }
+        const np = nj * W + ni; if (!mask[np] || seen[np]) continue;
+        const [cr, cg, cb] = at(qi, qj), [nr, ng, nb] = at(ni, nj);
+        if (Math.abs(cr - nr) + Math.abs(cg - ng) + Math.abs(cb - nb) > 30) continue;
+        seen[np] = 1; qs.push(np);
       }
     }
     const w = x1 - x0 + 1, h = y1 - y0 + 1;
@@ -114,17 +119,32 @@ function parseTimetableImage(img) {
   const gridL = cols[0].cx - colW / 2;
 
   // 4) 가로 그리드 라인으로 시간 단위(pitch) 추정
+  const hist = new Array(32).fill(0);
+  for (let j = 0; j < H; j += 2) for (let i = 0; i < W; i += 2) { const [r, g, b] = at(i, j); hist[((r + g + b) / 3 / 8) | 0]++; }
+  const bgV = hist.indexOf(Math.max(...hist)) * 8 + 4;   // 배경 밝기(라이트/다크 자동)
   const rowsGray = [];
   for (let j = 1; j < H - 1; j++) {
     let cnt = 0;
-    for (let i = (gridL | 0) + 2; i < W - 2; i++) { const [r, g, b] = at(i, j); if (Math.abs(r - g) < 8 && Math.abs(g - b) < 8 && r > 195 && r < 246) cnt++; }
-    if (cnt > (W - gridL) * .6) rowsGray.push(j);
+    for (let i = (gridL | 0) + 2; i < W - 2; i++) {
+      const [r, g, b] = at(i, j), v = (r + g + b) / 3, dv = Math.abs(v - bgV);
+      if (Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && dv > 4 && dv < 75) cnt++;
+    }
+    if (cnt > (W - gridL) * .55) rowsGray.push(j);
   }
   const lines = []; rowsGray.forEach(y => { if (!lines.length || y - lines[lines.length - 1] > 4) lines.push(y); });
   let pitch = 0, top = 0;
   if (lines.length > 2) {
     const gaps = []; for (let i = 1; i < lines.length; i++) gaps.push(lines[i] - lines[i - 1]);
-    gaps.sort((a, b) => a - b); pitch = gaps[gaps.length >> 1]; top = lines[0];
+    gaps.sort((a, b) => a - b); pitch = gaps[gaps.length >> 1];
+    // 블록 경계(30분 격자)와 위상이 맞는 선만 기준선 후보로
+    const hp = pitch / 2, ys = [];
+    comps.forEach(m => { ys.push(m.y0); ys.push(m.y1); });
+    const ph = ys.map(y => ((y % hp) + hp) % hp).sort((a, b) => a - b)[ys.length >> 1];
+    const off = y => { const d = Math.abs((((y - ph) % hp) + hp) % hp); return Math.min(d, hp - d); };
+    const y0min = Math.min(...comps.map(m => m.y0));
+    const cand = lines.filter(y => y >= 3 && off(y) < hp * .3 && y0min - y < pitch * 1.15);
+    cand.push(y0min);
+    top = Math.min(...cand);
   } else { pitch = Math.min(...comps.map(m => m.h)); top = Math.min(...comps.map(m => m.y0)); }
   if (pitch < 6) pitch = Math.min(...comps.map(m => m.h));
 
@@ -320,9 +340,10 @@ function fitStage() {
 window.addEventListener('resize', () => { if ($('#s3').classList.contains('active')) { fitStage(); draw(); } });
 
 /* 손그림 흔들림 */
+let WAVE = 26;
 const rnd = n => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
 function jit(seed, t, amp) {
-  const s = t / 26, i = Math.floor(s), f = s - i, u = f * f * (3 - 2 * f);
+  const s = t / WAVE, i = Math.floor(s), f = s - i, u = f * f * (3 - 2 * f);
   const a = rnd(seed + i), b = rnd(seed + i + 1);
   return ((a + (b - a) * u) * 2 - 1) * amp;
 }
@@ -337,7 +358,8 @@ function geom() {
   const rowH = tw * (rows > 10 ? 1.35 / rows : .145);
   const th = headH + rowH * rows;
   const x = S.tt.x * W - tw / 2, y = S.tt.y * H;
-  return { x, y, tw, th, timeW, headH, colW, rowH, rows, days, amp: tw * .0045 };
+  WAVE = tw * .055;
+  return { x, y, tw, th, timeW, headH, colW, rowH, rows, days, amp: tw * .0058 };
 }
 
 function wrap(text, maxW, max) {
@@ -352,10 +374,16 @@ function wrap(text, maxW, max) {
 const lum = h => { const n = parseInt(h.slice(1), 16); return (.299 * (n >> 16) + .587 * ((n >> 8) & 255) + .114 * (n & 255)) / 255; };
 
 function drawTable() {
-  const g = geom(), f = S.font;
+  const g = geom(), f = S.fontTable;
   ctx.save();
-  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.2, g.tw * .0055);
+  ctx.strokeStyle = S.lineColor; ctx.lineWidth = Math.max(1.4, g.tw * .0078);
   ctx.lineJoin = ctx.lineCap = 'round';
+
+  // 표 안쪽 기본 흰색
+  ctx.beginPath();
+  poly([...hSeg(g.y, g.x, g.x + g.tw, 99, g.amp), ...vSeg(g.x + g.tw, g.y, g.y + g.th, 60, g.amp),
+        ...hSeg(g.y + g.th, g.x + g.tw, g.x, g.rows * 3 + 100, g.amp), ...vSeg(g.x, g.y + g.th, g.y, 39, g.amp)]);
+  ctx.closePath(); ctx.fillStyle = '#FFFFFF'; ctx.fill();
 
   // 격자
   ctx.beginPath();
@@ -425,18 +453,24 @@ function draw() {
     const r = bubbleRect(); ctx.drawImage(S.bubbleImg, r.x, r.y, r.w, r.h);
     if (S.bubbleText) {
       const [cxr, cyr, wr] = BUBBLE_TXT[S.bubbleIdx] || [.5, .5, .7];
+      const T = S.bubbleTxt;
       ctx.fillStyle = '#3a3a3a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const maxLines = S.bubbleText.length > 16 ? 2 : 1;
-      let fs = r.w * .105, lines;
+      let base = r.w * .105, lines;
       for (;;) {
-        ctx.font = `600 ${fs}px "${S.font}", Pretendard, sans-serif`;
+        ctx.font = `600 ${base}px "${S.fontBubble}", Pretendard, sans-serif`;
         lines = wrap(S.bubbleText, r.w * wr, 3);
-        if (lines.length <= maxLines || fs < r.w * .045) break;
-        fs *= .9;
+        if (lines.length <= maxLines || base < r.w * .045) break;
+        base *= .9;
       }
-      const cx = r.x + r.w * cxr, cy = r.y + r.h * cyr;
+      const fs = base * T.k;
+      ctx.font = `600 ${fs}px "${S.fontBubble}", Pretendard, sans-serif`;
+      lines = wrap(S.bubbleText, r.w * wr * Math.max(1, T.k), 3);
+      const cx = r.x + r.w * cxr + T.dx * r.w, cy = r.y + r.h * cyr + T.dy * r.h;
+      let mw = 0; lines.forEach(l => mw = Math.max(mw, ctx.measureText(l).width));
       lines.forEach((l, i) => ctx.fillText(l, cx, cy + (i - (lines.length - 1) / 2) * fs * 1.25));
-    }
+      S._txt = { x: cx - mw / 2, y: cy - lines.length * fs * .68, w: mw, h: lines.length * fs * 1.32 };
+    } else S._txt = null;
   }
   drawTable();
   drawSel();
@@ -444,6 +478,7 @@ function draw() {
 
 function selRect() {
   if (!S.sel) return null;
+  if (S.sel.t === 'btext') return S._txt;
   if (S.sel.t === 'bubble') return bubbleRect();
   if (S.sel.t === 'sticker') return stickerRect(S.stickers[S.sel.i]);
   if (S.sel.t === 'table' && S.done) return tableRect();
@@ -471,11 +506,12 @@ cv.addEventListener('pointerdown', e => {
   const p = toCv(e);
   const cur = selRect();
   if (cur && S.sel.t !== 'item' && Math.hypot(p.x - (cur.x + cur.w), p.y - (cur.y + cur.h)) < cv.width * .05) {
-    drag = { mode: 'resize', p, w0: (S.sel.t === 'bubble' ? S.bubble.w : S.sel.t === 'table' ? S.tt.w : S.stickers[S.sel.i].w), r0: cur };
+    drag = { mode: 'resize', p, w0: (S.sel.t === 'btext' ? S.bubbleTxt.k : S.sel.t === 'bubble' ? S.bubble.w : S.sel.t === 'table' ? S.tt.w : S.stickers[S.sel.i].w), r0: cur };
     return;
   }
   let hit = null;
-  for (let i = S.stickers.length - 1; i >= 0; i--) if (inR(p, stickerRect(S.stickers[i]))) { hit = { t: 'sticker', i }; break; }
+  if (S._txt && inR(p, S._txt)) hit = { t: 'btext' };
+  for (let i = hit ? -1 : S.stickers.length - 1; i >= 0; i--) if (inR(p, stickerRect(S.stickers[i]))) { hit = { t: 'sticker', i }; break; }
   if (!hit && S.bubbleImg && inR(p, bubbleRect())) hit = { t: 'bubble' };
   if (!hit) {
     const g = geom();
@@ -487,7 +523,10 @@ cv.addEventListener('pointerdown', e => {
     if (!hit && inR(p, tableRect())) hit = { t: 'table' };
   }
   S.sel = hit;
-  if (hit && (hit.t === 'sticker' || hit.t === 'bubble' || (hit.t === 'table' && S.done))) {
+  if (hit && hit.t === 'btext') {
+    const br = bubbleRect();
+    drag = { mode: 'txtmove', p, x0: S.bubbleTxt.dx, y0: S.bubbleTxt.dy, br };
+  } else if (hit && (hit.t === 'sticker' || hit.t === 'bubble' || (hit.t === 'table' && S.done))) {
     const o = hit.t === 'bubble' ? S.bubble : hit.t === 'table' ? S.tt : S.stickers[hit.i];
     drag = { mode: 'move', p, x0: o.x, y0: o.y, o };
   }
@@ -496,11 +535,14 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   if (!drag) return;
   const p = toCv(e);
-  if (drag.mode === 'move') { drag.o.x = drag.x0 + (p.x - drag.p.x) / cv.width; drag.o.y = drag.y0 + (p.y - drag.p.y) / cv.height; }
+  if (drag.mode === 'txtmove') { S.bubbleTxt.dx = drag.x0 + (p.x - drag.p.x) / drag.br.w; S.bubbleTxt.dy = drag.y0 + (p.y - drag.p.y) / drag.br.h; }
+  else if (drag.mode === 'move') { drag.o.x = drag.x0 + (p.x - drag.p.x) / cv.width; drag.o.y = drag.y0 + (p.y - drag.p.y) / cv.height; }
   else {
     const k = (p.x - drag.r0.x) / drag.r0.w;
     const nw = Math.max(.12, Math.min(1.6, drag.w0 * k));
-    if (S.sel.t === 'bubble') S.bubble.w = nw; else if (S.sel.t === 'table') S.tt.w = Math.min(1, nw); else S.stickers[S.sel.i].w = nw;
+    if (S.sel.t === 'btext') S.bubbleTxt.k = Math.max(.3, Math.min(4, drag.w0 * k));
+    else if (S.sel.t === 'bubble') S.bubble.w = nw;
+    else if (S.sel.t === 'table') S.tt.w = Math.min(1, nw); else S.stickers[S.sel.i].w = nw;
   }
   draw();
 });
@@ -516,17 +558,19 @@ PALETTE.forEach(c => {
   };
   $('#palette').appendChild(i);
 });
-FONTS.forEach(([id, label], k) => {
-  const b = document.createElement('button'); b.textContent = label; b.style.fontFamily = `"${id}", Pretendard`;
-  if (!k) b.classList.add('sel');
-  b.onclick = async () => {
-    document.querySelectorAll('.fonts button').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
-    S.font = id;
-    try { await document.fonts.load(`16px "${id}"`); } catch (e) { }
-    if (!document.fonts.check(`16px "${id}"`) && id !== 'Pretendard') toast(`${label} 폰트 파일이 없어요. fonts/ 폴더에 넣어 주세요.`);
-    draw();
-  };
-  $('#fonts').appendChild(b);
+[['#fontsTable', 'fontTable', 'BMKkubulim'], ['#fontsBubble', 'fontBubble', 'Pretendard']].forEach(([sel, key, def]) => {
+  FONTS.forEach(([id, label]) => {
+    const b = document.createElement('button'); b.textContent = label; b.style.fontFamily = `"${id}", Pretendard`;
+    if (id === def) b.classList.add('sel');
+    b.onclick = async () => {
+      document.querySelectorAll(sel + ' button').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
+      S[key] = id;
+      try { await document.fonts.load(`16px "${id}"`); } catch (e) { }
+      if (!document.fonts.check(`16px "${id}"`) && id !== 'Pretendard') toast(`${label} 폰트 파일이 없어요. fonts/ 폴더에 넣어 주세요.`);
+      draw();
+    };
+    document.querySelector(sel).appendChild(b);
+  });
 });
 
 /* ---------- 완료 / 저장 ---------- */
@@ -549,6 +593,7 @@ $('#saveBtn').onclick = () => {
 /* ---------- 초기화 ---------- */
 (async () => {
   S.bgImg = await loadImg(S.bgSrc).catch(() => null);
+  await Promise.all(FONTS.map(f => document.fonts.load(`16px "${f[0]}"`).catch(() => { })));
   await document.fonts.ready;
-  fitStage();
+  fitStage(); draw();
 })();

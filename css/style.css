@@ -1,9 +1,10 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
-@font-face{font-family:'BMKkubulim';src:url('../fonts/BMKkubulim.ttf') format('truetype'),url('../fonts/BMKkubulim.otf') format('opentype');font-display:swap}
+@font-face{font-family:'BMKkubulim';src:url('../fonts/BMKkubulim.woff2') format('woff2'),url('../fonts/BMKkubulim.ttf') format('truetype');font-display:swap}
 @font-face{font-family:'YoonJihee';src:url('../fonts/YoonJihee.ttf') format('truetype'),url('../fonts/YoonJihee.otf') format('opentype');font-display:swap}
 @font-face{font-family:'YoonSehee';src:url('../fonts/YoonSehee.ttf') format('truetype'),url('../fonts/YoonSehee.otf') format('opentype');font-display:swap}
-@font-face{font-family:'OkDandan';src:url('../fonts/OkDandan.ttf') format('truetype'),url('../fonts/OkDandan.otf') format('opentype');font-display:swap}
+@font-face{font-family:'OkDandan';src:url('../fonts/OkDandan.woff2') format('woff2'),url('../fonts/OkDandan.ttf') format('truetype');font-display:swap}
 
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;color:#525252;
   background-image:url('../assets/bg/bg8.jpg');background-size:cover;background-attachment:fixed}
@@ -12,11 +13,11 @@ body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple S
 .screen.active{display:block}
 
 .title{font-size:18px;line-height:26px;font-weight:600;text-align:center;letter-spacing:.01em;color:#525252;margin:40px 0 0}
-.blue{color:#7d9fd1}.pink{color:#e3a7b5}
+.blue{color:#7d9fd1;font-weight:500}.pink{color:#e3a7b5;font-weight:500}
 .pill{display:inline-block;background:#EBEBEB;border-radius:999px;padding:4px 14px;font-size:10px;font-weight:500;color:#606060;letter-spacing:.01em}
 .center{display:block;margin-left:auto;margin-right:auto;text-align:center;width:fit-content}
 .hint{font-size:10px;line-height:15px;color:#989898;margin:8px 0 10px}
-.hint.center{text-align:center}
+.hint.center{text-align:center;margin-left:auto;margin-right:auto}
 
 .drop{display:flex;align-items:center;justify-content:center;background:#fff;border:1.4px dashed #ABABAB;border-radius:5px;cursor:pointer;overflow:hidden;position:relative}
 .tt-drop{width:226px;height:306px;margin:12px auto 0}
@@ -35,18 +36,18 @@ body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple S
 .char-slot.loading::after{content:'누끼 따는 중…';position:absolute;inset:0;background:#fffc;display:flex;align-items:center;justify-content:center;font-size:10px}
 .fab{display:block;margin:14px auto 0;width:33px;height:33px;border-radius:50%;background:#363636;color:#fff;font-size:20px;border:0;line-height:1;cursor:pointer}
 
-.cta{display:block;width:100%;height:47px;background:#5B5B5B;color:#fff;border:0;border-radius:999px;font-size:14px;font-weight:500;letter-spacing:.02em;margin-top:28px;cursor:pointer}
+.cta{display:block;width:100%;height:42px;background:#5B5B5B;color:#fff;border:0;border-radius:999px;font-size:13px;font-weight:500;letter-spacing:.02em;margin-top:24px;cursor:pointer}
 .cta:disabled{opacity:.45}
-.ghost{height:47px;padding:0 24px;background:#FAFAFA;border:1px solid #E1E1E1;border-radius:999px;font-size:14px;color:#7a7a7a;cursor:pointer}
+.ghost{height:42px;padding:0 20px;background:#FAFAFA;border:1px solid #E1E1E1;border-radius:999px;font-size:13px;color:#7a7a7a;cursor:pointer}
 .ghost.full{width:100%;margin-top:8px;height:38px}
-.dark-pill{width:100px;height:47px;background:#5B5B5B;color:#fff;border:0;border-radius:999px;font-size:14px;cursor:pointer}
+.dark-pill{width:84px;height:42px;background:#5B5B5B;color:#fff;border:0;border-radius:999px;font-size:13px;cursor:pointer}
 .row-btn{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:22px}
 .flex1{flex:1;margin-top:0}
 
 .bg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:14px}
 .bg-grid img{width:100%;aspect-ratio:1;object-fit:cover;border:1.2px solid #BBB;border-radius:2px;cursor:pointer}
 .bg-grid img.sel,.bubble-grid .cell.sel{outline:2px solid #5B5B5B;outline-offset:1px}
-.add-bg{width:100%;height:47px;margin-top:14px;font-size:14px;color:#848383;font-weight:500}
+.add-bg{width:100%;height:44px;margin-top:14px;font-size:13.5px;color:#848383;font-weight:500}
 .custom-bg-wrap{display:flex;justify-content:center;margin-top:12px}
 .custom-bg-wrap img{width:91px;height:123px;object-fit:cover;border:1.4px dashed #BBB;cursor:pointer}
 .custom-bg-wrap img.sel{outline:2px solid #5B5B5B}
@@ -55,19 +56,19 @@ body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple S
 .bubble-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:14px}
 .bubble-grid .cell{aspect-ratio:1;border:1.4px dashed #BBB;border-radius:5px;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:8px}
 .bubble-grid .cell img{max-width:100%;max-height:100%}
-.text-input{width:100%;height:47px;margin-top:16px;background:#FBFBFB;border:1.4px solid #D7D7D7;border-radius:5px;padding:0 20px;font-size:14px;color:#525252;font-family:inherit}
+.text-input{width:100%;height:44px;margin-top:16px;background:#FBFBFB;border:1.4px solid #D7D7D7;border-radius:5px;padding:0 20px;font-size:14px;color:#525252;font-family:inherit}
 .text-input::placeholder{color:#A5A5A5}
 
 .stage-wrap{display:flex;justify-content:center;margin-top:8px}
 #stage{border:1.5px solid #A1A1A1;max-height:52vh;touch-action:none;background:#fff}
 .panel{border:1px solid #CDCDCD;border-radius:5px;background:#fff;padding:14px;margin-top:8px}
-.palette{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+.palette{display:grid;grid-template-columns:repeat(10,1fr);gap:5px}
 .palette i{display:block;aspect-ratio:1;border-radius:50%;cursor:pointer;border:1px solid #0001}
 .fonts{display:flex;flex-wrap:wrap;gap:8px}
 .fonts button{flex:1 1 45%;height:32px;background:#FAFAFA;border:1px solid #E1E1E1;border-radius:999px;font-size:13px;color:#5b5b5b;cursor:pointer}
 .fonts button.sel{background:#5B5B5B;color:#fff;border-color:#5B5B5B}
-.round-dark{width:47px;height:47px;border-radius:50%;background:#363636;color:#fff;border:0;font-size:12px;margin-top:18px;cursor:pointer}
-.round-dark.on{background:#8fa9c4}
+.round-dark{width:42px;height:42px;border-radius:50%;background:#363636;color:#fff;border:0;font-size:11.5px;margin-top:16px;cursor:pointer}
+.round-dark.on{box-shadow:0 0 0 2px #fff,0 0 0 3.5px #363636}
 
 .modal{display:none;position:fixed;inset:0;background:#0007;z-index:20;align-items:center;justify-content:center;padding:16px}
 .modal.open{display:flex}
@@ -82,3 +83,7 @@ body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple S
 .irow .x{border:0;background:none;color:#c88;font-size:15px;cursor:pointer}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#333e;color:#fff;padding:10px 18px;border-radius:999px;font-size:12px;opacity:0;pointer-events:none;transition:.25s;z-index:30}
 .toast.show{opacity:1}
+
+.font-sec{font-size:10px;color:#8b8b8b;margin:2px 0 6px}
+.font-sec:not(:first-child){margin-top:12px}
+@media (max-width:401px){.phone{padding-left:16px;padding-right:16px}}

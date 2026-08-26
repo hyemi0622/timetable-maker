@@ -30,18 +30,24 @@ design/         원본 디자인 시안 (배포에는 불필요)
 fonts/          손글씨 폰트 파일을 넣는 곳
 ```
 
-## 폰트 넣기
-저작권 때문에 폰트 파일은 포함하지 않았습니다. 아래에서 받아 `fonts/` 에 **정확한 이름**으로 넣어 주세요.
-(구글폰트 손글씨체 5종은 파일 없이도 바로 동작합니다.)
+## 글꼴
+글꼴은 **시간표용 / 말풍선용을 따로** 고를 수 있습니다. 기본값은 시간표 = 배민 꾸불림체, 말풍선 = Pretendard.
 
-| 글꼴 | 파일명 | 받는 곳 |
-|---|---|---|
-| 배달의민족 꾸불림체 | `fonts/BMKkubulim.ttf` | https://font.co.kr/collection/sub?family_idx=11053 |
-| Yoon 지희 | `fonts/YoonJihee.ttf` | https://font.co.kr/collection/sub?family_idx=10092 |
-| Yoon 세희 | `fonts/YoonSehee.ttf` | https://font.co.kr/collection/sub?family_idx=10088 |
-| Ok 단단체 | `fonts/OkDandan.ttf` | https://freefontpick.co.kr/font/238 |
+| 글꼴 | 상태 |
+|---|---|
+| Pretendard | 포함 (CDN) |
+| 배달의민족 꾸불림체 | `fonts/BMKkubulim.woff2` 포함 |
+| Ok 단단체 | `fonts/OkDandan.woff2` 포함 |
+| Yoon 지희 | 직접 받아 `fonts/YoonJihee.ttf` 로 넣어 주세요 — https://font.co.kr/collection/sub?family_idx=10092 |
+| Yoon 세희 | 직접 받아 `fonts/YoonSehee.ttf` 로 넣어 주세요 — https://font.co.kr/collection/sub?family_idx=10088 |
 
-`.otf` 파일이면 확장자만 `.otf`로 두면 됩니다(둘 다 인식). 상업적 이용 전에는 각 폰트의 라이선스를 확인하세요.
+윤디자인 두 글꼴은 사이트에서 로그인 후 내려받는 방식이라 자동으로 받을 수 없었습니다.
+파일을 넣으면 버튼이 바로 동작하고, 없는 상태로 누르면 안내 문구가 뜹니다.
+
+## 파싱에 대해
+- 라이트 모드 / **다크 모드 캡쳐본 모두** 지원합니다 (배경 밝기를 자동으로 판별).
+- 붙어 있는 두 과목이 **에타에서 같은 색**이면 한 덩어리로 인식됩니다. `확인/수정`에서 나눠 주세요.
+- 시작 시각·종료 시각·요일 수도 `확인/수정`에서 바꿀 수 있습니다.
 
 ## 배포 (GitHub Pages)
 ```bash
