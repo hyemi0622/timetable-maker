@@ -39,7 +39,7 @@ const fileURL = f => URL.createObjectURL(f);
 function go(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
   window.scrollTo(0, 0);
-  if (id === 's3') { fitStage(); draw(); }
+  if (id === 's3') { fitStage(); draw(); ensureAssets().then(draw); }
 }
 
 /* ================= 1. 시간표 이미지 파싱 ================= */
