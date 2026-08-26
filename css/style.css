@@ -6,8 +6,9 @@
 @font-face{font-family:'OkDandan';src:url('../fonts/OkDandan.woff2') format('woff2'),url('../fonts/OkDandan.ttf') format('truetype');font-display:swap}
 
 html,body{-webkit-text-size-adjust:100%;-moz-text-size-adjust:100%;text-size-adjust:100%}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
-body{margin:0;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;color:#525252;
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%;
+  max-height:1000000px}   /* WebKit 글자 자동 확대(Font Boosting) 차단 */
+body{margin:0;font-size:16px;background:#f4f4f5;font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;color:#525252;
   background-image:url('../assets/bg/bg8.jpg');background-size:cover;background-attachment:fixed}
 .phone{position:relative;max-width:402px;margin:0 auto;min-height:100vh;background:rgba(255,255,255,.62);padding:0 28px 60px;overflow-x:hidden}
 .screen{display:none;padding-top:20px}
