@@ -683,13 +683,18 @@ PALETTE.forEach(c => {
   };
   $('#palette').appendChild(i);
 });
-const pick = document.createElement('input');      // 직접 고르기
-pick.type = 'color'; pick.className = 'pick'; pick.value = '#3A3A3A'; pick.title = '직접 고르기';
+const pickWrap = document.createElement('label');   // 직접 고르기 (무지개 버튼)
+pickWrap.className = 'pick'; pickWrap.title = '색 직접 고르기';
+const pick = document.createElement('input');
+pick.type = 'color'; pick.value = '#3A3A3A';
+const dot = document.createElement('b');
 pick.oninput = () => {
+  dot.style.background = pick.value;
   if (S.sel && S.sel.t === 'item') S.items[S.sel.i].color = pick.value; else S.lineColor = pick.value;
   draw();
 };
-$('#palette').appendChild(pick);
+pickWrap.append(pick, dot);
+$('#palette').appendChild(pickWrap);
 [['#fontsTable', 'fontTable', 'OkDandan'], ['#fontsBubble', 'fontBubble', 'Pretendard']].forEach(([sel, key, def]) => {
   FONTS.forEach(([id, label]) => {
     const b = document.createElement('button'); b.textContent = label; b.style.fontFamily = `"${id}", Pretendard`;
