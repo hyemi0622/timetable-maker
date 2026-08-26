@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
 <title>시간표 커스텀 메이커</title>
-<link rel="stylesheet" href="css/style.css?v=20260826174501">
+<link rel="stylesheet" href="css/style.css?v=20260826174752">
 </head>
 <body>
 <div class="phone">
@@ -20,7 +20,6 @@
       <img class="preview" id="ttPreview" alt="">
     </label>
     <div class="parse-info" id="parseInfo"></div>
-    <p class="hint center">글자 파싱 오류가 많습니다.<br>과목을 탭하면 직접 수정 할 수 있어요.</p>
 
     <div class="pill center" style="margin-top:36px">캐릭터 추가</div>
     <div class="char-grid" id="charGrid"></div>
@@ -57,6 +56,7 @@
   <!-- ===== 3. 완성본 ===== -->
   <section class="screen" id="s3">
     <div class="stage-wrap"><canvas id="stage"></canvas></div>
+    <p class="hint center">글자 파싱 오류가 많습니다.<br>과목을 탭하면 직접 수정 할 수 있어요.</p>
     <div class="item-edit" id="itemEdit" hidden>
       <input id="ieName" placeholder="과목명" maxlength="30">
       <input id="ieRoom" placeholder="교수명 · 강의실 등 (작은 글씨)" maxlength="60">
@@ -135,6 +135,6 @@
   } catch (e) { }
 })();
 </script>
-<script src="js/app.js?v=20260826174501"></script>
+<script src="js/app.js?v=20260826174752"></script>
 </body>
 </html>
